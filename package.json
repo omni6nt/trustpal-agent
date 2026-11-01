@@ -1,0 +1,18 @@
+{
+  "name": "trustpal-agent",
+  "version": "0.1.0",
+  "description": "An AI payments agent for cross-border remittances on NEAR Intents, with hard spending limits and a tamper-evident trust ledger.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "demo": "node src/demo.ts",
+    "start": "node src/cli.ts",
+    "live": "node src/cli.ts --live",
+    "test": "node --test test/*.test.ts",
+    "quote": "node scripts/quote.ts"
+  },
+  "dependencies": {
+    "@defuse-protocol/one-click-sdk-typescript": "^0.1.13"
+  }
+}

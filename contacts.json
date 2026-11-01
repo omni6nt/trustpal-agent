@@ -1,0 +1,4 @@
+[
+  { "name": "Mum", "aliases": ["mother", "mummy"], "chain": "sol", "address": "REPLACE_WITH_SOLANA_ADDRESS" },
+  { "name": "Tunde", "aliases": [], "chain": "sol", "address": "REPLACE_WITH_SOLANA_ADDRESS" }
+]
