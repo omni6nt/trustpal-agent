@@ -1,91 +1,104 @@
 # Trustpal Agent
 
-**An AI payments agent for cross-border remittances on NEAR Intents, with hard spending limits and a tamper-evident trust ledger.**
+**An AI payment agent that prepares payments but cannot overspend or pay the wrong address.**
 
-Built for NEAR HACKATHON (Nov 2026). Track: **Real-World Money** (remittances), with safeguards in the spirit of AI Security & Defense.
+Built for NEAR HACKATHON (Nov 2026). Target tracks: **Real-World Money** and **AI Security & Defense**.
 
-## The problem
+> **Status: early prototype (v0.1.0), work in progress.** This README says exactly what works today, what is mocked, and what is still planned. Nothing below is claimed unless it is marked as working.
 
-Sending money to family in Nigeria is slow and expensive, and giving an AI agent control of money is scary. Trustpal Agent shows how to do both safely: you say what you want in plain language, and the agent does the work, but it can never move money outside rules you set.
+## The idea
 
-## What it does
+People and small businesses send money across borders (for example, paying a contractor in Lagos). Letting an AI agent handle that is risky: a manipulated agent could pay the wrong address or overspend.
 
-1. You type: `send $15 to my mum`
-2. The agent parses the request, finds the contact, and gets a quote through **NEAR Intents (1Click Swap API)**.
-3. A deterministic **policy engine** checks it: per-payment limit, daily limit, max fee, recipient trust score, and a low cap for brand-new recipients.
-4. You see fee, amount received, ETA and trust score, and must **confirm**.
-5. After the swap, the outcome is written as a **claim** to a hash-chained ledger. Each recipient's trust score is computed from their claims, and editing history is detectable.
+Trustpal's design rule: **the AI interprets requests, but a separate, deterministic layer decides whether money may move.** The AI cannot talk its way past that layer.
 
-### Design principles
+## What works today
 
-- **The AI never has authority.** The optional Claude parser only turns text into `{amount, recipient}`. `src/policy.ts` decides if a payment is allowed, and the user confirms. A prompt injection can change what is *requested*, not what is *permitted*.
-- **The agent never holds keys.** In live mode it requests a quote and gives you a deposit address; you send funds yourself and the agent watches the swap status.
-- **Everything is verifiable.** Claims are append-only and hash-chained (`src/trust.ts`).
+| Feature | Status |
+|---|---|
+| Chat-style request parsing (`send $15 to Mum`) | Working (regex parser; optional Claude parser, off by default, untested here) |
+| Recipients come only from `contacts.json` (the AI cannot invent addresses) | Working |
+| Deterministic spending policy: per-payment limit, daily limit, max fee, minimum trust score, cap for new recipients | Working (offline, tested) |
+| Human confirmation before any payment | Working |
+| Hash-chained claim ledger that detects edited history | Working (local file) |
+| Offline demo with mock payments | Working |
+| 18 automated tests | Passing (offline only) |
+| NEAR Intents (1Click) quotes and swap status | Code written, **not yet tested live** |
 
-## Try it in 60 seconds (no keys, no funds)
+## What is NOT built yet (be skeptical of anything not in the table above)
 
-Requires Node.js >= 22.18.
+- **No on-chain enforcement yet.** In the current version the agent never signs or moves money. In live mode it prints a deposit address and the user sends funds by hand. So today the spending limits are enforced by the app, not by the blockchain.
+- **No payout to Nigerian bank accounts.** NEAR Intents moves crypto between chains. Any naira figure shown is a fixed, indicative number, not a live rate.
+- **No "cheapest route" comparison.** The agent shows one quote.
+- **Trust score is only your own payment history with a contact**, not a global reputation or identity check.
+- **Known issues being fixed** (found in review): two simultaneous payments can pass a daily limit; payments that time out are not counted as spent; a recipient's score is tied to the contact name, not the address; the executed quote is not compared to the approved one.
+
+## Roadmap (in priority order)
+
+1. **A small NEAR policy contract** holds the payment token and enforces, on-chain: an approved-recipient list, a per-payment cap, a daily cap (reserved before the transfer) and a pause switch. The agent gets only a restricted key that can call `pay`, so even a hijacked agent cannot pay an unapproved address or exceed the limits.
+2. Fix the known issues above (reserve spending, lock the approved quote, key trust by address, handle all swap statuses).
+3. Allow / Warn / Block decisions with reasons.
+4. A reproducible prompt-injection demo: an invoice carrying an attacker's address; the contract itself rejects the payment.
+5. `THREAT_MODEL.md`, one-command run, seeded demo account, 2-minute video.
+
+NEAR Intents has no testnet, so cross-chain quotes will be dry-run only.
+
+## Try it (no keys, no funds)
+
+Requires Node.js 22.18 or newer. No install step is needed for the offline demo and tests.
 
 ```bash
-git clone <this-repo-url> && cd trustpal-agent
-npm test        # Expect: 18 tests pass
+git clone https://github.com/omni6nt/trustpal-agent.git
+cd trustpal-agent
+npm test        # Expect: "pass 18", "fail 0"
 npm run demo    # Expect: the 5 scenarios below
 ```
 
-`npm run demo` runs a scripted scenario. Do X, see Y:
+`npm run demo` runs a scripted scenario with mock payments. Do X, see Y:
 
 | Step | Input | Expected result |
 |---|---|---|
 | 1 | `send $15 to my mum` | Quote shown, auto-confirmed, `COMPLETED`, Mum trust 50 -> 60 |
 | 2 | `send $50 to Tunde` | `BLOCKED`: new recipient capped at $20 |
-| 3 | `send $500 to Mum` | `BLOCKED`: over per-payment and daily limits |
+| 3 | `send $500 to Mum` | `BLOCKED`: over the per-payment and daily limits |
 | 4 | `send $10 to Chidi` | "I don't have a contact called Chidi" |
-| 5 | Edit a past claim | `ledger intact: true`, then `{ ok: false, brokenAt: 0 }` |
+| 5 | Edit a past claim on purpose | `ledger intact: true`, then `{ ok: false, brokenAt: 0 }`. This is the **intentional tamper test**: the ledger correctly detects that entry 0 was edited. |
 
-Interactive mode (mock swaps, you confirm each payment): `npm start`, then type `send $15 to Mum`.
+Interactive mode with mock payments: `npm start`, then type `send $15 to Mum`.
 
-## Live mode (real NEAR Intents swaps)
+## Live mode (experimental, not yet verified)
 
 ```bash
 npm install
-cp .env.example .env        # fill in ONE_CLICK_JWT and REFUND_ADDRESS, then export them
-# edit contacts.json with real addresses (chain codes as listed by OneClickService.getTokens())
-npm run quote               # dry-run quote, moves no funds
-npm run live                # interactive agent; you send the deposit it asks for
+cp .env.example .env     # fill in ONE_CLICK_JWT and REFUND_ADDRESS, then export them
+npm run quote            # dry-run quote, moves no funds
+npm run live             # interactive agent
 ```
 
-Notes:
-- NEAR Intents has no testnet, so use small amounts (about $1).
-- A 1Click JWT is needed for quotes; request one via the form linked in the SDK docs.
-- The naira figure shown to the user is **indicative** (`NGN_PER_USD`). Intents moves value across chains; converting to naira is done by the recipient through a local exchange or P2P. Integrating an off-ramp is future work.
+Live mode needs the `@defuse-protocol/one-click-sdk-typescript` package and uses mainnet only, so use tiny amounts. It has been written against the documentation but not yet tested with real swaps. Never commit your `.env` file or any keys.
 
-## NEAR technologies used
+## NEAR technologies
 
-- **NEAR Intents / 1Click Swap API** (`@defuse-protocol/one-click-sdk-typescript`): quotes, deposit addresses, execution status (`src/swap.ts`, `scripts/quote.ts`).
+- **NEAR Intents / 1Click Swap API**: quotes, deposit addresses, swap status (`src/swap.ts`, `scripts/quote.ts`). Code written, not yet verified live.
+- **Planned**: a custom NEAR policy contract with a function-call access key for the agent.
 
-## Other tools and AI usage
+## Other tools and AI use
 
-- Optional **Claude** (Anthropic API) for parsing free-form requests (`src/llm.ts`). Off by default; a regex parser is the fallback.
-- This project was written with AI assistance (Claude). All code is reviewed and tested by the author.
-- Node.js built-in test runner; no other runtime dependencies.
+- Optional Claude (Anthropic API) for parsing free-form requests (`src/llm.ts`). Off by default.
+- This project is written with AI assistance (Claude, ChatGPT). Code is reviewed and tested by the authors.
+- Tests use Node's built-in test runner.
 
 ## Project layout
 
 ```
-src/agent.ts    orchestration: parse -> quote -> policy -> confirm -> execute -> claim
+src/agent.ts    flow: parse -> quote -> policy -> confirm -> execute -> claim
 src/policy.ts   deterministic spending rules
-src/trust.ts    hash-chained claim ledger + trust score
-src/swap.ts     MockProvider (offline) and IntentsProvider (live)
-src/parse.ts    fallback intent parser; src/llm.ts optional Claude parser
+src/trust.ts    hash-chained claim ledger and trust score
+src/swap.ts     MockProvider (offline) and IntentsProvider (live, untested)
+src/parse.ts    request parser; src/llm.ts optional Claude parser
 src/demo.ts     scripted demo; src/cli.ts interactive agent
 test/           18 tests
 ```
-
-## Limitations and roadmap
-
-- Live mode has been written against the 1Click docs but needs more testing with real swaps.
-- Claims are stored locally. Next: anchor ledger hashes on NEAR so trust scores are publicly verifiable.
-- Next: function-call keys so the agent can pay within an on-chain allowance, and a naira off-ramp partner.
 
 ## License
 
