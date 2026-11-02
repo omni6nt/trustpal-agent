@@ -4,15 +4,20 @@
   "description": "An AI payments agent for cross-border remittances on NEAR Intents, with hard spending limits and a tamper-evident trust ledger.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "demo": "node src/demo.ts",
     "start": "node src/cli.ts",
     "live": "node src/cli.ts --live",
     "test": "node --test test/*.test.ts",
-    "quote": "node scripts/quote.ts"
+    "quote": "node scripts/quote.ts",
+    "keygen": "node scripts/keygen.ts",
+    "attack": "node src/attack.ts"
   },
   "dependencies": {
-    "@defuse-protocol/one-click-sdk-typescript": "^0.1.13"
+    "@defuse-protocol/one-click-sdk-typescript": "^0.1.13",
+    "near-api-js": "^7.4.0"
   }
 }

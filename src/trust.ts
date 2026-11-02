@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
-export type ClaimStatus = 'completed' | 'failed' | 'refunded';
+export type ClaimStatus = 'completed' | 'failed' | 'refunded' | 'blocked';
 
 export interface ClaimInput {
   subject: string; // the counterparty the claim is about
@@ -84,6 +84,7 @@ export class Ledger {
     for (const c of this.about(subject)) {
       if (c.status === 'completed') s += 10;
       else if (c.status === 'refunded') s -= 5;
+      else if (c.status === 'blocked') continue; // a refused attempt is not a payment outcome
       else s -= 20;
       s = Math.max(0, Math.min(100, s));
     }
