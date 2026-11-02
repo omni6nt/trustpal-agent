@@ -12,7 +12,7 @@ export interface GuardDeps {
 }
 
 export type GuardResult =
-  | { status: 'PAID'; check: Check; outcome: PayOutcome }
+  | { status: 'PAID' | 'PENDING'; check: Check; outcome: PayOutcome }
   | { status: 'REFUSED_BY_GUARD' | 'DECLINED_BY_HUMAN'; check: Check }
   | { status: 'REJECTED_BY_CONTRACT'; check: Check; error: string };
 
@@ -46,6 +46,11 @@ export async function guardedPay(
   }
 
   const outcome = await deps.chain.pay(recipient, amount, reference);
+  // Accepted but not yet confirmed: do NOT record it as completed.
+  if (outcome.ok && !outcome.settled) {
+    deps.log('Payment accepted by the contract but not confirmed yet. Not recorded as completed.');
+    return { status: 'PENDING', check, outcome };
+  }
   deps.ledger.append({
     subject: recipient,
     amountUsd: 0, // amounts here are NEAR, not USD; the ledger field is only used by the USD flow

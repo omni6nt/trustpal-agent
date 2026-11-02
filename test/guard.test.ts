@@ -79,3 +79,11 @@ test('blocked attempts are audited and do not change trust score', async () => {
   assert.equal(deps.ledger.score('evil.testnet'), 50);
   assert.ok(deps.ledger.verify().ok);
 });
+
+test('accepted-but-unconfirmed payment is PENDING and not recorded as completed', async () => {
+  const { chain, deps } = mk();
+  (chain as any).pay = async () => ({ ok: true, txHash: 'x', settled: false });
+  const r = await guardedPay('good.testnet', nearToYocto('0.1'), 'p1', deps);
+  assert.equal(r.status, 'PENDING');
+  assert.equal(deps.ledger.completedCount('good.testnet'), 0);
+});

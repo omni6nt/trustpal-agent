@@ -21,7 +21,8 @@ export interface PolicyView {
 }
 
 export type PayOutcome =
-  | { ok: true; txHash?: string }
+  // settled=false means the contract accepted the request but the transfer has not been confirmed yet
+  | { ok: true; txHash?: string; settled: boolean }
   | { ok: false; error: string };
 
 /** What the agent is allowed to do on chain: look, and ask the contract to pay. Nothing else. */
@@ -63,7 +64,7 @@ export class MockChain implements Chain {
     this.used.add(reference);
     this.reserved += amount;
     this.balance -= amount;
-    return { ok: true, txHash: 'mock-' + reference };
+    return { ok: true, txHash: 'mock-' + reference, settled: true };
   }
 }
 
@@ -108,7 +109,17 @@ export class NearChain implements Chain {
         gas: 50_000_000_000_000n,
         deposit: 0n,
       });
-      return { ok: true, txHash: out?.transaction?.hash ?? undefined };
+      const txHash = out?.transaction?.hash ?? undefined;
+      // The contract pays in a second step (callback). Only report "settled" once the
+      // contract itself says Completed; a Failed transfer is reported as an error.
+      for (let i = 0; i < 12; i++) {
+        const p = await this.view<any>('get_payment', { reference }).catch(() => null);
+        const st = p?.status;
+        if (st === 'Completed') return { ok: true, txHash, settled: true };
+        if (st === 'Failed') return { ok: false, error: 'Transfer failed after the contract accepted it; the reservation was released' };
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      return { ok: true, txHash, settled: false };
     } catch (e: any) {
       return { ok: false, error: String(e?.message ?? e).slice(0, 300) };
     }
