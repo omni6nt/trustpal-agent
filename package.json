@@ -15,7 +15,8 @@
     "quote": "node scripts/quote.ts",
     "keygen": "node scripts/keygen.ts",
     "attack": "node src/attack.ts",
-    "key-limits": "node scripts/key-limits.ts"
+    "key-limits": "node scripts/key-limits.ts",
+    "web": "node src/web.ts"
   },
   "dependencies": {
     "@defuse-protocol/one-click-sdk-typescript": "^0.1.13",
