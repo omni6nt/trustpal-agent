@@ -12,11 +12,14 @@
 //!     in the same block cannot both pass
 //!   - the contract must not be paused
 //!   - a payment reference can only be used once
+//!   - a newly approved recipient cannot be paid until a cooldown has passed, so an
+//!     attacker who tricks the owner into approving an address cannot drain at once
+//!   - funds tied up in pending payments cannot be withdrawn or double-spent
 //!
 //! Amounts are in yoctoNEAR (1 NEAR = 10^24 yoctoNEAR). Admin methods are
 //! owner-only and are NOT callable with the agent's restricted key.
 
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::store::{IterableSet, LookupMap};
 use near_sdk::{
     env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise,
@@ -30,6 +33,7 @@ const CALLBACK_GAS: Gas = Gas::from_tgas(10);
 enum StorageKey {
     Allowlist,
     Payments,
+    ApprovedAt,
 }
 
 #[near(serializers = [borsh, json])]
@@ -60,6 +64,9 @@ pub struct PolicyView {
     pub remaining_today: U128,
     pub paused: bool,
     pub utc_day: u64,
+    pub cooldown_seconds: u64,
+    /// Funds promised to payments that have not settled yet.
+    pub pending_total: U128,
 }
 
 #[near(contract_state)]
@@ -73,12 +80,20 @@ pub struct PolicyContract {
     reserved_today: u128,
     paused: bool,
     payments: LookupMap<String, Payment>,
+    cooldown_ns: u64,
+    approved_at: LookupMap<AccountId, u64>,
+    pending_total: u128,
 }
 
 #[near]
 impl PolicyContract {
     #[init]
-    pub fn new(owner_id: AccountId, max_per_payment: U128, daily_cap: U128) -> Self {
+    pub fn new(
+        owner_id: AccountId,
+        max_per_payment: U128,
+        daily_cap: U128,
+        cooldown_seconds: u64,
+    ) -> Self {
         require!(max_per_payment.0 > 0, "max_per_payment must be above zero");
         require!(
             daily_cap.0 >= max_per_payment.0,
@@ -93,6 +108,9 @@ impl PolicyContract {
             reserved_today: 0,
             paused: false,
             payments: LookupMap::new(StorageKey::Payments),
+            cooldown_ns: cooldown_seconds.saturating_mul(1_000_000_000),
+            approved_at: LookupMap::new(StorageKey::ApprovedAt),
+            pending_total: 0,
         }
     }
 
@@ -102,13 +120,17 @@ impl PolicyContract {
 
     pub fn add_recipient(&mut self, account_id: AccountId) {
         self.assert_owner();
-        self.allowlist.insert(account_id.clone());
+        // Re-adding an address must not restart (or skip) its cooldown.
+        if self.allowlist.insert(account_id.clone()) {
+            self.approved_at.insert(account_id.clone(), env::block_timestamp());
+        }
         env::log_str(&event("recipient_added", &account_id.to_string()));
     }
 
     pub fn remove_recipient(&mut self, account_id: AccountId) {
         self.assert_owner();
         self.allowlist.remove(&account_id);
+        self.approved_at.remove(&account_id);
         env::log_str(&event("recipient_removed", &account_id.to_string()));
     }
 
@@ -122,6 +144,12 @@ impl PolicyContract {
         self.max_per_payment = max_per_payment.0;
         self.daily_cap = daily_cap.0;
         env::log_str(&event("limits_set", &format!("{}/{}", max_per_payment.0, daily_cap.0)));
+    }
+
+    pub fn set_cooldown(&mut self, cooldown_seconds: u64) {
+        self.assert_owner();
+        self.cooldown_ns = cooldown_seconds.saturating_mul(1_000_000_000);
+        env::log_str(&event("cooldown_set", &cooldown_seconds.to_string()));
     }
 
     pub fn set_paused(&mut self, paused: bool) {
@@ -162,6 +190,10 @@ impl PolicyContract {
             self.allowlist.contains(&recipient),
             "BLOCKED: recipient is not on the approved list"
         );
+        require!(
+            env::block_timestamp() >= self.payable_after_ns(&recipient),
+            "BLOCKED: recipient was approved too recently (cooldown not finished)"
+        );
         let amount = amount.0;
         require!(amount > 0, "Amount must be above zero");
         require!(
@@ -180,6 +212,7 @@ impl PolicyContract {
 
         // Reserve BEFORE the transfer so pending payments count against the limit.
         self.reserved_today += amount;
+        self.pending_total += amount;
         self.payments.insert(
             reference.clone(),
             Payment {
@@ -210,8 +243,10 @@ impl PolicyContract {
         let succeeded = env::promise_result_checked(0, 0).is_ok();
         let today = self.day;
         let mut released: u128 = 0;
+        let mut settled: u128 = 0;
         if let Some(p) = self.payments.get_mut(&reference) {
             if p.status == PaymentStatus::Pending {
+                settled = p.amount.0;
                 if succeeded {
                     p.status = PaymentStatus::Completed;
                 } else {
@@ -223,6 +258,7 @@ impl PolicyContract {
             }
         }
         self.reserved_today = self.reserved_today.saturating_sub(released);
+        self.pending_total = self.pending_total.saturating_sub(settled);
         let name = if succeeded { "payment_completed" } else { "payment_failed" };
         env::log_str(&event(name, &reference));
     }
@@ -240,11 +276,22 @@ impl PolicyContract {
             remaining_today: U128(self.daily_cap.saturating_sub(reserved)),
             paused: self.paused,
             utc_day: today,
+            cooldown_seconds: self.cooldown_ns / 1_000_000_000,
+            pending_total: U128(self.pending_total),
         }
     }
 
     pub fn is_allowed(&self, account_id: AccountId) -> bool {
         self.allowlist.contains(&account_id)
+    }
+
+    /// Earliest time (ns since epoch) this recipient can be paid; None if not approved.
+    pub fn payable_after(&self, account_id: AccountId) -> Option<U64> {
+        if self.allowlist.contains(&account_id) {
+            Some(U64(self.payable_after_ns(&account_id)))
+        } else {
+            None
+        }
     }
 
     pub fn get_recipients(&self) -> Vec<AccountId> {
@@ -272,9 +319,21 @@ impl PolicyContract {
         }
     }
 
+    fn payable_after_ns(&self, account_id: &AccountId) -> u64 {
+        self.approved_at
+            .get(account_id)
+            .copied()
+            .unwrap_or(0)
+            .saturating_add(self.cooldown_ns)
+    }
+
+    /// Balance that is neither needed for storage nor promised to a pending payment.
     fn available_balance(&self) -> u128 {
         let storage = (env::storage_usage() as u128) * env::storage_byte_cost().as_yoctonear();
-        env::account_balance().as_yoctonear().saturating_sub(storage)
+        env::account_balance()
+            .as_yoctonear()
+            .saturating_sub(storage)
+            .saturating_sub(self.pending_total)
     }
 }
 
@@ -320,7 +379,7 @@ mod tests {
     /// Owner funded contract: max 5 NEAR per payment, 8 NEAR per day, alex approved.
     fn setup() -> PolicyContract {
         ctx(owner(), NS_PER_DAY * 10);
-        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR));
+        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR), 0);
         c.add_recipient(alex());
         c
     }
@@ -407,9 +466,49 @@ mod tests {
             .account_balance(NearToken::from_millinear(1))
             .block_timestamp(NS_PER_DAY * 10)
             .build();
-        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR));
+        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR), 0);
         c.add_recipient(alex());
         testing_env!(ctx);
         let _ = c.pay(alex(), U128(NEAR), "poor".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "approved too recently")]
+    fn cooldown_blocks_a_freshly_approved_recipient() {
+        ctx(owner(), NS_PER_DAY * 10);
+        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR), 600);
+        c.add_recipient(alex());
+        ctx(owner(), NS_PER_DAY * 10 + 599 * 1_000_000_000);
+        c.pay(alex(), U128(NEAR), "r1".to_string());
+    }
+
+    #[test]
+    fn cooldown_allows_payment_once_it_has_passed() {
+        ctx(owner(), NS_PER_DAY * 10);
+        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR), 600);
+        c.add_recipient(alex());
+        ctx(owner(), NS_PER_DAY * 10 + 600 * 1_000_000_000);
+        c.pay(alex(), U128(NEAR), "r1".to_string());
+        assert_eq!(c.get_policy().pending_total.0, NEAR);
+    }
+
+    #[test]
+    fn re_adding_a_recipient_does_not_restart_the_cooldown() {
+        ctx(owner(), NS_PER_DAY * 10);
+        let mut c = PolicyContract::new(owner(), U128(5 * NEAR), U128(8 * NEAR), 600);
+        c.add_recipient(alex());
+        ctx(owner(), NS_PER_DAY * 10 + 500 * 1_000_000_000);
+        c.add_recipient(alex());
+        assert_eq!(c.payable_after(alex()).unwrap().0, NS_PER_DAY * 10 + 600 * 1_000_000_000);
+        assert!(c.payable_after(attacker()).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Not enough free balance")]
+    fn pending_payments_cannot_be_withdrawn() {
+        let mut c = setup();
+        c.pay(alex(), U128(5 * NEAR), "r1".to_string());
+        // balance in the test env is 100 NEAR; 5 is promised, so 100 is not free
+        c.withdraw(U128(100 * NEAR));
     }
 }

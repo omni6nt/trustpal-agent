@@ -64,6 +64,7 @@ async function state() {
     approved: LEGIT,
     maxPerPayment: yoctoToNear(p.maxPerPayment), dailyCap: yoctoToNear(p.dailyCap),
     remainingToday: yoctoToNear(p.remainingToday), paused: p.paused,
+    cooldown: p.cooldownSeconds, pending: yoctoToNear(p.pendingTotal),
     audit: ledger.claims.slice(-8).reverse().map((c) => ({ at: c.at, who: c.subject, status: c.status, hash: c.hash.slice(0, 10) })),
     ledgerIntact: ledger.verify().ok,
   };
@@ -90,7 +91,7 @@ button.red{background:#b3372f}button:disabled{opacity:.5}pre{white-space:pre-wra
 <script>
 const $=id=>document.getElementById(id);
 async function load(){const s=await (await fetch('/api/state')).json();$('mode').textContent=s.mode;
-$('pol').innerHTML=[['Per-payment limit',s.maxPerPayment+' NEAR'],['Daily limit',s.dailyCap+' NEAR'],['Remaining today',s.remainingToday+' NEAR'],['Approved recipient',s.approved],['Paused',String(s.paused)]].map(([k,v])=>'<div><div class=k>'+k+'</div><div class=v style="font-size:'+(v.length>16?13:20)+'px">'+v+'</div></div>').join('');
+$('pol').innerHTML=[['Per-payment limit',s.maxPerPayment+' NEAR'],['Daily limit',s.dailyCap+' NEAR'],['Remaining today',s.remainingToday+' NEAR'],['Approved recipient',s.approved],['New-recipient cooldown',s.cooldown+' s'],['Pending (unsettled)',s.pending+' NEAR'],['Paused',String(s.paused)]].map(([k,v])=>'<div><div class=k>'+k+'</div><div class=v style="font-size:'+(v.length>16?13:20)+'px">'+v+'</div></div>').join('');
 $('intact').textContent='hash chain intact: '+s.ledgerIntact;
 $('aud').innerHTML='<tr><th>Time</th><th>Address</th><th>Outcome</th><th>Hash</th></tr>'+s.audit.map(a=>'<tr><td>'+a.at.slice(11,19)+'</td><td>'+a.who+'</td><td class='+(a.status=='completed'?'ok':'bad')+'>'+a.status+'</td><td>'+a.hash+'</td></tr>').join('');}
 document.querySelectorAll('button').forEach(b=>b.onclick=async()=>{document.querySelectorAll('button').forEach(x=>x.disabled=true);$('out').innerHTML='<pre>working...</pre>';

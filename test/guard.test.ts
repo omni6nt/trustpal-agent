@@ -87,3 +87,14 @@ test('accepted-but-unconfirmed payment is PENDING and not recorded as completed'
   assert.equal(r.status, 'PENDING');
   assert.equal(deps.ledger.completedCount('good.testnet'), 0);
 });
+
+test('recipient inside the new-recipient cooldown is BLOCKed by the guard and by the chain', async () => {
+  const { chain, deps } = mk();
+  chain.approvedAtMs.set('good.testnet', Date.now());
+  chain.cooldownSeconds = 600;
+  const c = await checkCounterparty('good.testnet', deps);
+  assert.equal(c.verdict, 'BLOCK');
+  assert.ok(c.reasons.some((r) => r.includes('cooldown')));
+  const direct = await chain.pay('good.testnet', nearToYocto('0.1'), 'cd1');
+  assert.ok(!direct.ok && direct.error.includes('approved too recently'));
+});

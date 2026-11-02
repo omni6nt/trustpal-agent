@@ -23,7 +23,7 @@ export interface BlocklistEntry {
  */
 export async function checkCounterparty(
   address: string,
-  deps: { chain: Chain; blocklist: BlocklistEntry[]; ledger: Ledger }
+  deps: { chain: Chain; blocklist: BlocklistEntry[]; ledger: Ledger; now?: () => number }
 ): Promise<Check> {
   const reasons: string[] = [];
   let verdict: Verdict = 'ALLOW';
@@ -48,6 +48,12 @@ export async function checkCounterparty(
     bump('BLOCK');
   } else {
     reasons.push('On the contract\'s approved recipient list');
+    const after = await deps.chain.payableAfterMs(address);
+    const now = (deps.now ?? Date.now)();
+    if (after !== null && now < after) {
+      reasons.push(`Approved too recently: the contract will not pay it for another ${Math.ceil((after - now) / 1000)}s (new-recipient cooldown)`);
+      bump('BLOCK');
+    }
   }
 
   const done = deps.ledger.completedCount(address);

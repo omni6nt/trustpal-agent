@@ -18,6 +18,8 @@ export interface PolicyView {
   dailyCap: bigint;
   remainingToday: bigint;
   paused: boolean;
+  cooldownSeconds: number;
+  pendingTotal: bigint;
 }
 
 export type PayOutcome =
@@ -29,6 +31,8 @@ export type PayOutcome =
 export interface Chain {
   isAllowed(address: string): Promise<boolean>;
   policy(): Promise<PolicyView>;
+  /** Earliest time (ms since epoch) this recipient can be paid, or null if not approved. */
+  payableAfterMs(address: string): Promise<number | null>;
   pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome>;
 }
 
@@ -45,18 +49,26 @@ export class MockChain implements Chain {
   private cap: bigint;
   private balance: bigint;
   private paused: boolean;
+  approvedAtMs = new Map<string, number>();
+  cooldownSeconds = 0;
+  now = () => Date.now();
   constructor(allow: Set<string>, max: bigint, cap: bigint, balance: bigint, paused = false) {
     this.allow = allow; this.max = max; this.cap = cap; this.balance = balance; this.paused = paused;
+    for (const a of allow) this.approvedAtMs.set(a, 0);
+  }
+  async payableAfterMs(a: string) {
+    return this.allow.has(a) ? (this.approvedAtMs.get(a) ?? 0) + this.cooldownSeconds * 1000 : null;
   }
   async isAllowed(a: string) { return this.allow.has(a); }
   async policy(): Promise<PolicyView> {
-    return { maxPerPayment: this.max, dailyCap: this.cap, remainingToday: this.cap - this.reserved, paused: this.paused };
+    return { maxPerPayment: this.max, dailyCap: this.cap, remainingToday: this.cap - this.reserved, paused: this.paused, cooldownSeconds: this.cooldownSeconds, pendingTotal: 0n };
   }
   async pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome> {
     if (this.paused) return { ok: false, error: 'BLOCKED: payments are paused' };
     if (reference.length < 1 || reference.length > 64) return { ok: false, error: 'reference must be 1-64 characters' };
     if (this.used.has(reference)) return { ok: false, error: 'BLOCKED: this payment reference was already used' };
     if (!this.allow.has(recipient)) return { ok: false, error: 'BLOCKED: recipient is not on the approved list' };
+    if (this.now() < ((await this.payableAfterMs(recipient)) ?? 0)) return { ok: false, error: 'BLOCKED: recipient was approved too recently (cooldown not finished)' };
     if (amount <= 0n) return { ok: false, error: 'Amount must be above zero' };
     if (amount > this.max) return { ok: false, error: 'BLOCKED: amount is over the per-payment limit' };
     if (this.reserved + amount > this.cap) return { ok: false, error: 'BLOCKED: amount is over the remaining daily limit' };
@@ -98,7 +110,13 @@ export class NearChain implements Chain {
       dailyCap: BigInt(p.daily_cap),
       remainingToday: BigInt(p.remaining_today),
       paused: !!p.paused,
+      cooldownSeconds: Number(p.cooldown_seconds ?? 0),
+      pendingTotal: BigInt(p.pending_total ?? '0'),
     };
+  }
+  async payableAfterMs(a: string): Promise<number | null> {
+    const v = await this.view<string | null>('payable_after', { account_id: a });
+    return v === null ? null : Number(BigInt(v) / 1_000_000n); // ns -> ms
   }
   async pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome> {
     try {
