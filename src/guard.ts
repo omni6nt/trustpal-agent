@@ -28,7 +28,20 @@ export async function guardedPay(
   reference: string,
   deps: GuardDeps
 ): Promise<GuardResult> {
-  const check = await checkCounterparty(recipient, deps);
+  // If the owner approved this exact reference, the approval is the authority: it must match to the letter.
+  let check: Check;
+  const appr = await deps.chain.approval(reference).catch(() => null);
+  if (appr) {
+    if (appr.recipient !== recipient || appr.amount !== amount) {
+      check = { verdict: 'BLOCK', reasons: [`This does not match what the owner approved for "${reference}" (approved: ${yoctoToNear(appr.amount)} NEAR to ${appr.recipient})`] };
+    } else if (Date.now() > appr.expiresMs) {
+      check = { verdict: 'BLOCK', reasons: [`The owner's approval for "${reference}" has expired`] };
+    } else {
+      check = { verdict: 'ALLOW', reasons: ['The owner approved this exact payment (recipient, amount, reference)'] };
+    }
+  } else {
+    check = await checkCounterparty(recipient, deps);
+  }
   const label = `${yoctoToNear(amount)} NEAR -> ${recipient}`;
   deps.log(`check ${label}: ${check.verdict}`);
   check.reasons.forEach((r) => deps.log(`   - ${r}`));

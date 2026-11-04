@@ -30,8 +30,12 @@ const results = [
     acct.addFullAccessKey(KeyPair.fromRandom('ed25519').getPublicKey())),
   await attempt('call a different method on the policy contract (set_paused)', () =>
     acct.callFunction({ contractId: POLICY_ID, methodName: 'set_paused', args: { paused: true }, gas: 30_000_000_000_000n })),
+  await attempt('create an approval for itself (approve_payment)', () =>
+    acct.callFunction({ contractId: POLICY_ID, methodName: 'approve_payment', args: { reference: 'x-' + Date.now(), recipient: 'attacker-wallet.testnet', amount: '1000000000000000000000000', valid_for_seconds: 3600 }, gas: 30_000_000_000_000n })),
+  await attempt('rewrite the revenue split (set_split)', () =>
+    acct.callFunction({ contractId: POLICY_ID, methodName: 'set_split', args: { shares: [{ account_id: 'attacker-wallet.testnet', bps: 10000 }] }, gas: 30_000_000_000_000n })),
   await attempt('call pay on some other contract', () =>
     acct.callFunction({ contractId: 'omni6nt-alex.testnet', methodName: 'pay', args: {}, gas: 30_000_000_000_000n })),
 ];
-console.log(results.every(Boolean) ? '\nAll 4 forbidden actions were refused by the NEAR protocol/contract.' : '\nSOMETHING WAS ALLOWED. Do not continue.');
+console.log(results.every(Boolean) ? '\nAll 6 forbidden actions were refused by the NEAR protocol/contract.' : '\nSOMETHING WAS ALLOWED. Do not continue.');
 process.exit(results.every(Boolean) ? 0 : 1);

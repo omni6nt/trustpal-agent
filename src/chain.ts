@@ -20,6 +20,25 @@ export interface PolicyView {
   paused: boolean;
   cooldownSeconds: number;
   pendingTotal: bigint;
+  revenueTotal: bigint;
+}
+
+export interface ApprovalInfo {
+  reference: string;
+  recipient: string;
+  amount: bigint;
+  expiresMs: number;
+}
+
+export interface SplitShare {
+  account: string;
+  bps: number;
+}
+
+export interface AccountInfo {
+  exists: boolean;
+  isContract: boolean;
+  balance: bigint;
 }
 
 export type PayOutcome =
@@ -33,6 +52,14 @@ export interface Chain {
   policy(): Promise<PolicyView>;
   /** Earliest time (ms since epoch) this recipient can be paid, or null if not approved. */
   payableAfterMs(address: string): Promise<number | null>;
+  /** The owner's approval for this exact reference, if one is open. */
+  approval(reference: string): Promise<ApprovalInfo | null>;
+  listApprovals(): Promise<ApprovalInfo[]>;
+  /** Addresses on the owner's standing approved list. */
+  recipients(): Promise<string[]>;
+  split(): Promise<SplitShare[]>;
+  /** What the chain says about an address: does it exist, is it a contract. */
+  accountInfo(address: string): Promise<AccountInfo>;
   pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome>;
 }
 
@@ -56,23 +83,63 @@ export class MockChain implements Chain {
     this.allow = allow; this.max = max; this.cap = cap; this.balance = balance; this.paused = paused;
     for (const a of allow) this.approvedAtMs.set(a, 0);
   }
+  accounts = new Map<string, AccountInfo>();
+  approvals = new Map<string, ApprovalInfo>();
+  shares: SplitShare[] = [];
+  revenue = 0n;
+  // --- owner-only actions (the agent never has these); used by tests and the offline demo
+  approvePayment(reference: string, recipient: string, amount: bigint, seconds: number) {
+    this.approvals.set(reference, { reference, recipient, amount, expiresMs: this.now() + seconds * 1000 });
+  }
+  setSplit(shares: SplitShare[]) {
+    if (shares.reduce((s, x) => s + x.bps, 0) > 10_000) throw new Error('Shares cannot add up to more than 10000 basis points');
+    this.shares = shares;
+  }
+  /** What each share receives. Whatever is not paid out (treasury share + rounding dust) is retained, like the contract. */
+  receiveRevenue(amount: bigint): { payouts: { account: string; amount: bigint }[]; retained: bigint } {
+    if (!this.shares.length) throw new Error('No revenue split has been configured');
+    let paid = 0n;
+    const payouts = this.shares.map((s) => {
+      const a = (amount * BigInt(s.bps)) / 10_000n;
+      paid += a;
+      return { account: s.account, amount: a };
+    });
+    this.revenue += amount;
+    this.balance += amount - paid;
+    return { payouts, retained: amount - paid };
+  }
+  async recipients() { return [...this.allow]; }
+  async approval(r: string) { return this.approvals.get(r) ?? null; }
+  async listApprovals() { return [...this.approvals.values()]; }
+  async split() { return this.shares; }
+  async accountInfo(a: string): Promise<AccountInfo> {
+    return this.accounts.get(a) ?? { exists: true, isContract: false, balance: 10n ** 24n };
+  }
   async payableAfterMs(a: string) {
     return this.allow.has(a) ? (this.approvedAtMs.get(a) ?? 0) + this.cooldownSeconds * 1000 : null;
   }
   async isAllowed(a: string) { return this.allow.has(a); }
   async policy(): Promise<PolicyView> {
-    return { maxPerPayment: this.max, dailyCap: this.cap, remainingToday: this.cap - this.reserved, paused: this.paused, cooldownSeconds: this.cooldownSeconds, pendingTotal: 0n };
+    return { maxPerPayment: this.max, dailyCap: this.cap, remainingToday: this.cap - this.reserved, paused: this.paused, cooldownSeconds: this.cooldownSeconds, pendingTotal: 0n, revenueTotal: this.revenue };
   }
   async pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome> {
     if (this.paused) return { ok: false, error: 'BLOCKED: payments are paused' };
     if (reference.length < 1 || reference.length > 64) return { ok: false, error: 'reference must be 1-64 characters' };
     if (this.used.has(reference)) return { ok: false, error: 'BLOCKED: this payment reference was already used' };
-    if (!this.allow.has(recipient)) return { ok: false, error: 'BLOCKED: recipient is not on the approved list' };
-    if (this.now() < ((await this.payableAfterMs(recipient)) ?? 0)) return { ok: false, error: 'BLOCKED: recipient was approved too recently (cooldown not finished)' };
     if (amount <= 0n) return { ok: false, error: 'Amount must be above zero' };
-    if (amount > this.max) return { ok: false, error: 'BLOCKED: amount is over the per-payment limit' };
+    const appr = this.approvals.get(reference);
+    if (appr) {
+      if (appr.recipient !== recipient || appr.amount !== amount)
+        return { ok: false, error: 'BLOCKED: this payment does not match what the owner approved for this reference' };
+      if (this.now() > appr.expiresMs) return { ok: false, error: "BLOCKED: the owner's approval for this reference has expired" };
+    } else {
+      if (!this.allow.has(recipient)) return { ok: false, error: 'BLOCKED: recipient is not on the approved list' };
+      if (this.now() < ((await this.payableAfterMs(recipient)) ?? 0)) return { ok: false, error: 'BLOCKED: recipient was approved too recently (cooldown not finished)' };
+      if (amount > this.max) return { ok: false, error: 'BLOCKED: amount is over the per-payment limit' };
+    }
     if (this.reserved + amount > this.cap) return { ok: false, error: 'BLOCKED: amount is over the remaining daily limit' };
     if (amount > this.balance) return { ok: false, error: 'the policy contract does not hold enough funds' };
+    if (appr) this.approvals.delete(reference);
     this.used.add(reference);
     this.reserved += amount;
     this.balance -= amount;
@@ -112,7 +179,42 @@ export class NearChain implements Chain {
       paused: !!p.paused,
       cooldownSeconds: Number(p.cooldown_seconds ?? 0),
       pendingTotal: BigInt(p.pending_total ?? '0'),
+      revenueTotal: BigInt(p.revenue_total ?? '0'),
     };
+  }
+  private toApproval(a: any): ApprovalInfo {
+    return {
+      reference: a.reference,
+      recipient: a.recipient,
+      amount: BigInt(a.amount),
+      expiresMs: Number(BigInt(a.expires_at) / 1_000_000n),
+    };
+  }
+  async approval(reference: string): Promise<ApprovalInfo | null> {
+    const a = await this.view<any>('get_approval', { reference });
+    return a ? this.toApproval(a) : null;
+  }
+  async recipients(): Promise<string[]> {
+    return await this.view<string[]>('get_recipients', {});
+  }
+  async listApprovals(): Promise<ApprovalInfo[]> {
+    return (await this.view<any[]>('list_approvals', {})).map((a) => this.toApproval(a));
+  }
+  async split(): Promise<SplitShare[]> {
+    return (await this.view<any[]>('get_split', {})).map((s) => ({ account: s.account_id, bps: Number(s.bps) }));
+  }
+  async accountInfo(a: string): Promise<AccountInfo> {
+    try {
+      const v: any = await this.provider.viewAccount({ accountId: a });
+      const hash = String(v.codeHash ?? v.code_hash ?? '');
+      return { exists: true, isContract: hash !== '' && !/^1+$/.test(hash), balance: BigInt(v.amount ?? 0) };
+    } catch (e: any) {
+      // Only a clear "no such account" answer counts as non-existent; any other failure is rethrown.
+      if (/does not exist|UNKNOWN_ACCOUNT|doesn't exist/i.test(String(e?.message ?? e) + String(e?.type ?? ''))) {
+        return { exists: false, isContract: false, balance: 0n };
+      }
+      throw e;
+    }
   }
   async payableAfterMs(a: string): Promise<number | null> {
     const v = await this.view<string | null>('payable_after', { account_id: a });
