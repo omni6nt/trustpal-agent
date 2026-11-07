@@ -66,4 +66,8 @@ The dashboard can send the owner's approval itself. The page never sees a privat
 4. This is a real testnet transaction even when the dashboard is in practice mode. The link under the form opens it on the NEAR testnet explorer.
 5. Rebuild the wallet code after changing `wallet/wallet.js` with `npm run build:wallet`.
 
+Tested live: the owner wallet approved INV-3001 (tx `8A3GvjATXMAp9p4k4XbALSScGtrGTWJA6mPS3YYASFHL`), and `get_approval` on the contract returned the exact recipient, amount and expiry.
+
+Cancel also tested live (tx `9pxqQH9RVkFSb2iDrsjcccKBe9knut6EmFbfdbTiwyrn`). In live mode the full loop is: approve in the wallet, then press **Pay the approved invoice** in the Security lab; the AI pays exactly the approved invoice.
+
 Safety notes: sign-in asks the wallet for a key limited to the read method `get_policy`, so the page holds no key that can approve or pay. Check this under the owner account's **Access Keys** on the explorer. Every approval opens your wallet for a fresh confirmation.

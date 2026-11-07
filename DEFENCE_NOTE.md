@@ -60,10 +60,10 @@ These are the values only the owner sets. The contract enforces them and the AI 
 
 | Rule | What it does | Notes |
 | --- | --- | --- |
-| Per-payment limit | The most one payment can be, for payees on the list | Approved invoices use their own exact amount |
+| Per-payment limit | The most one payment can be, for payees on the list | Approved invoices use their own exact amount instead, and still count against the daily limit |
 | Daily limit | The most that can leave in a day | Reserved before the transfer and released if the transfer fails, so parallel requests cannot overspend |
 | Payee list | People the AI may pay without a specific approval | Anyone else needs an approved invoice first |
-| New-payee wait | A newly added payee cannot be paid until a delay has passed | Set to 120 seconds on the testnet deployment |
+| New-payee wait | A newly added payee cannot be paid until a delay has passed | Set to 120 seconds on the testnet deployment. It applies to standing payees, not to an exact owner approval |
 | Exact-payment approval | Reference, recipient, amount and expiry, approved by the owner | Single use. Valid for up to 30 days. Can be cancelled |
 | Revenue split | When a client pays the business, shares go to named accounts automatically | Up to 10 shares, in basis points, total at most 100%. What is not handed out, plus any rounding remainder, stays in the treasury. A failed share transfer is refunded to the contract |
 | Pause | Stops all payments at once | Owner only |
@@ -86,9 +86,13 @@ Every claim falls into one of three groups. Nothing in the first group is a prom
 | The agent key is truly limited | Six attempts were refused by the network: send NEAR, add a key, pause, create an approval, change the split, call another contract |
 | The revenue split works | A 1 NEAR client payment was divided 0.5 to the contractor, 0.2 to the owner, 0.3 kept, as logged by the contract |
 | The look-alike check fires | The guard blocked an address one character away from an approved one |
+| The owner approves from the dashboard with a wallet | `approve_payment` was signed in Meteor by `omni6nt-owner.testnet`, succeeded on testnet, and the contract's `get_approval` returned the exact recipient, amount and expiry. A visitor wallet connects as view-only |
+| The full loop works from the dashboard | The owner approved INV-3002 in the wallet, the AI's restricted key paid exactly that invoice, replaying it was rejected by the contract ("this payment reference was already used"), and a fake invoice reusing the approved reference with another address was rejected ("this payment does not match what the owner approved for this reference"). The failed attack did not use up the approval |
+| The owner cancels an approval from the dashboard | `cancel_approval` signed in Meteor succeeded on testnet; the approval then disappeared from the live approvals list |
+| The dashboard holds no powerful key | After wallet sign-in the account had one extra key, limited to the read method `get_policy` on the policy contract. Approvals are signed fresh in the wallet each time |
 | The restricted-key setup is repeatable | `scripts/setup-testnet.sh` rebuilds the whole deployment in seven steps |
 
-Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testnet`, contractor `omni6nt-alex.testnet`. Transaction ids, searchable on a NEAR testnet explorer: approval `9R4dmtVCNTSZrFYtkYsRd9RXVL6FL1N84GcVUyxDyARc`, client payment `DFi5dtV6LWfNj82btq4htwYY8nX28aqAyrg6sp5ZnCxh`, deployment `4LhLL7Qcyy93sGF2Dpn6sg3ek3iaX8Ni5UDhJvbLeSB6`. An earlier deployment, `omni6nt-policy2.testnet`, is kept as a fallback.
+Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testnet`, contractor `omni6nt-alex.testnet`. Transaction ids, searchable on a NEAR testnet explorer: approval `9R4dmtVCNTSZrFYtkYsRd9RXVL6FL1N84GcVUyxDyARc`, client payment `DFi5dtV6LWfNj82btq4htwYY8nX28aqAyrg6sp5ZnCxh`, deployment `4LhLL7Qcyy93sGF2Dpn6sg3ek3iaX8Ni5UDhJvbLeSB6`, wallet-signed approval of INV-3001 `8A3GvjATXMAp9p4k4XbALSScGtrGTWJA6mPS3YYASFHL`, wallet-signed cancellation `9pxqQH9RVkFSb2iDrsjcccKBe9knut6EmFbfdbTiwyrn`, wallet-signed approvals of INV-3002 `5cffQdeWsuvEgeUmB4HST4Tj94MH9ZRWNrBCeSK69dYP` and INV-3003 `G1ssw2znCf71bJV59DvgtwhQvbbepTU8A7UB5ZRjdyBc`. An earlier deployment, `omni6nt-policy2.testnet`, is kept as a fallback.
 
 **2. Tested offline**
 
@@ -134,7 +138,7 @@ A defence note that hides its weak points is not a defence. These are the real o
 - **The owner key is the master key.** A hardware wallet or multisig owner is the next step.
 - **The look-alike check is a heuristic.** It flags names within two edits of a trusted payee. It can miss clever imitations and can flag innocent names. The contract's payee list and approvals are the real backstop.
 - **No global reputation data.** The guard's blocklist is local.
-- **Owner approvals use the command line.** There is no wallet-signed approval screen yet, on purpose: the page never holds the owner key. There is no login system yet either.
+- **Approvals are wallet-signed; there is no account system.** The owner approves from the dashboard by signing in a wallet (tested with Meteor on testnet). There are no email accounts or team roles yet. Email or passkey sign-in with a view-only role is the production direction. Other owner changes (split, limits, payees) still run from the command line on testnet.
 - **The AI is scripted by default.** The attack results show the defences work against a gullible AI. They do not measure how often a real model is fooled. That needs a red-team run with a real model and an API key.
 - **The gate animation is a replay.** The dashboard plays the real result after it returns. It places the stop at the gate whose rule failed, but the contract performs all of those checks in one call.
 - **The agent key's gas allowance runs out.** It is small by design and must be topped up by the owner.

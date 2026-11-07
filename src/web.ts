@@ -38,6 +38,8 @@ const ledger = new Ledger();
 type Outcome = 'paid' | 'stopped' | 'pending' | 'info';
 interface Activity { guardSkipped?: boolean; id: number; at: string; label: string; outcome: Outcome; stoppedAt: 'guard' | 'rules' | 'contract' | null; headline: string; logs: string[]; to?: string; amount?: string; tx?: string; mode: 'testnet' | 'practice' }
 const activity: Activity[] = [];
+const plainErr = (e: string) => String(e).replace(/^.*?Smart contract panicked:\s*/i, '').replace(/^BLOCKED:\s*/i, '');
+
 function classify(headline: string): { outcome: Outcome; stoppedAt: 'guard' | 'rules' | 'contract' | null } {
   if (/^PAID \(!!\)/.test(headline)) return { outcome: 'info', stoppedAt: null };
   if (/^PAID/.test(headline)) return { outcome: 'paid', stoppedAt: null };
@@ -85,13 +87,13 @@ async function runScenario(scenario: string) {
   } else if (scenario === 'bypass') {
     logs.push('Guard bypassed on purpose: agent calls the chain directly for ' + ATTACKER);
     const r = await chain.pay(ATTACKER, nearToYocto('0.5'), ref('bypass'));
-    headline = r.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + r.error;
+    headline = r.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + plainErr(r.error);
     logs.push(headline);
   } else if (scenario === 'overlimit') {
     const big = p.maxPerPayment * 2n;
     logs.push(`Agent asks ${yoctoToNear(big)} NEAR for the approved recipient (limit ${yoctoToNear(p.maxPerPayment)})`);
     const r = await chain.pay(LEGIT, big, ref('over'));
-    headline = r.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + r.error;
+    headline = r.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + plainErr(r.error);
     logs.push(headline);
   } else if (scenario === 'lookalike') {
     const fake = LEGIT.replace(/[aeiou]/, (m) => (m === 'a' ? '4' : m === 'e' ? '3' : m === 'i' ? '1' : m === 'o' ? '0' : 'v'));
@@ -105,7 +107,7 @@ async function runScenario(scenario: string) {
     } else {
       logs.push(`The agent tries to pay ${used.ref} again, same recipient, same amount.`);
       const p = await chain.pay(used.subject, nearToYocto(replayAmount), used.ref);
-      headline = p.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + p.error;
+      headline = p.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + plainErr(p.error);
       logs.push(headline);
     }
   } else if (scenario === 'approved' || scenario === 'fraud') {
@@ -124,7 +126,7 @@ async function runScenario(scenario: string) {
       logs.push(`Guard result: ${r.status}`);
       logs.push('Now the guard is bypassed and the agent calls the contract directly:');
       const d = await chain.pay(ATTACKER, a.amount, a.reference);
-      headline = d.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + d.error;
+      headline = d.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + plainErr(d.error);
       logs.push(headline);
     }
   } else throw new Error('unknown scenario');
@@ -158,7 +160,7 @@ async function runAgent(doc: string) {
     try {
       const r = await guardedPay(p.to, nearToYocto(p.amountNear), ref('inv'), deps);
       results.push({ to: p.to, amount: p.amountNear, status: r.status, detail: 'error' in r ? r.error : r.check.reasons[0] ?? '' });
-      const head = r.status === 'PAID' ? 'PAID: confirmed by the contract' : r.status === 'PENDING' ? 'PENDING: accepted, not yet confirmed' : r.status === 'REFUSED_BY_GUARD' ? 'REFUSED by the guard. No funds moved.' : r.status === 'REJECTED_BY_CONTRACT' ? 'REJECTED BY THE CONTRACT: ' + ('error' in r ? r.error : '') : r.status;
+      const head = r.status === 'PAID' ? 'PAID: confirmed by the contract' : r.status === 'PENDING' ? 'PENDING: accepted, not yet confirmed' : r.status === 'REFUSED_BY_GUARD' ? 'REFUSED by the guard. No funds moved.' : r.status === 'REJECTED_BY_CONTRACT' ? 'REJECTED BY THE CONTRACT: ' + plainErr('error' in r ? r.error : '') : r.status;
       record('Invoice read by the AI', head, [`The AI proposed ${p.amountNear} NEAR to ${p.to}`, ...(('check' in r && r.check.reasons) ? r.check.reasons : [])], { to: p.to, amount: p.amountNear });
     } catch (e: any) {
       results.push({ to: p.to, amount: p.amountNear, status: 'ERROR', detail: String(e?.message ?? e) });

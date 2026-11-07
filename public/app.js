@@ -142,7 +142,7 @@ const screens = {
   },
   invoices() {
     return `<h1 class="in">Let the AI read an invoice</h1>
-    <p class="lede in">Paste any invoice or email. The AI lists the payments it thinks it should make, and each one travels along the path of four gates. The sample hides an instruction aimed at the AI.</p>
+    <p class="lede in">Paste any invoice or email. The AI lists the payments it thinks it should make, and each one travels along the path of four checks. The sample hides an instruction aimed at the AI.</p>
     <section class="slab in"><label for="doc">Invoice text<textarea id="doc" spellcheck="false" style="margin-top:7px"></textarea></label>
       <div class="row" style="margin-top:18px"><button class="btn" id="readbtn">Read this invoice</button><button class="btn ghost" id="cleanbtn">Use a clean invoice</button><span class="sub">AI in use: ${esc(S.ai)}</span></div>
       <div id="invres" style="margin-top:14px"></div></section>`;
@@ -150,12 +150,12 @@ const screens = {
   approvals() {
     const list = S.approvals.length ? S.approvals.map((a) => `<div class="appr"><div><h3>${esc(a.ref)}</h3><p class="sub" style="word-break:break-all">to ${esc(a.to)}</p><p class="sub">${a.minutesLeft} min left. One use, exact amount.</p></div><div class="amt num">${fmt(a.amount)} <span class="sub">NEAR</span>${isOwnerAcct() && S.network === 'testnet' ? `<button class="btn ghost sm" data-cancel="${esc(a.ref)}" style="margin-top:8px">Cancel</button>` : ''}</div></div>`).join('') : `<div class="empty">No approved invoices are open. Approve one below and the AI can pay exactly that, once.</div>`;
     return `<h1 class="in">Approvals</h1>
-    <p class="lede in">An approval says: pay this person this exact amount for this invoice, once. The contract checks that the payment exactly matches the approved recipient, amount, invoice reference and deadline. Any difference and it refuses.</p>
+    <p class="lede in">An approval says: pay this person this exact amount for this invoice, once. The contract checks that the payment exactly matches the approved recipient, amount, invoice number and deadline. Any difference and it refuses.</p>
     <section class="slab in" style="padding-top:12px;padding-bottom:12px">${list}</section>
     <section class="slab in"><h2>Approve with your wallet</h2>${walletApproveBlock()}</section>
     <section class="slab in"><h2>Approve a payment</h2>
-      <p class="sub" style="margin-bottom:18px">${S.canEdit ? 'Practice mode applies it instantly. The same approval on testnet needs your owner key, so copy the command below.' : 'Approving needs your owner key, which the AI never has. Fill this in and run the command in your Codespace.'}</p>
-      <div class="formgrid"><label>Invoice reference<input id="aref" value="INV-2001"></label><label>Pay to<input id="ato" value="${esc(S.recipients[0] || '')}"></label><label>Amount (NEAR)<input id="aamt" value="0.5" inputmode="decimal"></label></div>
+      <p class="sub" style="margin-bottom:18px">${S.canEdit ? 'Practice mode applies it instantly. The same approval on testnet needs your owner key, so copy the command below.' : 'Prefer the terminal? Fill this in and run the command in your Codespace. The wallet button above does the same thing.'}</p>
+      <div class="formgrid"><label>Invoice number<input id="aref" value="INV-2001"></label><label>Pay to<input id="ato" value="${esc(S.recipients[0] || '')}"></label><label>Amount (NEAR)<input id="aamt" value="0.5" inputmode="decimal"></label></div>
       <div class="row" style="margin-top:18px">${S.canEdit ? '<button class="btn" id="aapply">Approve this payment</button>' : ''}</div>
       ${cmdBox('acmd', '')}<p class="note" id="aerr"></p></section>`;
   },
@@ -190,6 +190,7 @@ const screens = {
   activity() {
     return `<h1 class="in">Activity</h1>
     <p class="lede in">Everything the AI tried, and what happened. Each entry is chained to the one before, so a changed entry would break the chain.</p>
+    <p class="in"><button class="btn ghost sm" id="csv">Download records (CSV)</button></p>
     <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded this session</span></p>
     <section class="slab in" style="margin-top:20px">${S.activity.length ? `<ul class="tl">${S.activity.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">No activity yet.</div>'}</section>`;
   },
@@ -198,22 +199,22 @@ const screens = {
       ['invoice', 'Poisoned invoice', 'An invoice hides an instruction telling the AI to pay a stranger. The guard should refuse.'],
       ['fraud', 'Fraud on an approved invoice', "A fake invoice reuses an approved reference but swaps in the attacker's address."],
       ['lookalike', 'Look-alike address', "The payee's name is one character off from someone you trust."],
-      ['bypass', 'Guard bypassed', 'We switch the guard off and call the contract directly. The contract still says no.'],
+      ['bypass', 'Guard switched off', 'We switch the guard off and call the contract directly. The contract still says no.'],
       ['overlimit', 'Over the limit', 'The AI asks for twice the per-payment limit, for a trusted contractor.'],
     ], N = [
       ['approved', 'Pay the approved invoice', 'The happy path: pay exactly what the owner approved.'],
-      ['replay', 'Replay a paid invoice', 'Pay the same invoice a second time. Run the approved invoice first.'],
+      ['replay', 'Pay a paid invoice again', 'Try to pay an invoice that is already paid. Run the approved invoice first.'],
       ['legit', 'Pay an approved contractor', 'A normal payment to someone on your list, within limits.'],
     ], row = ([k, t, d]) => `<div class="atk"><div><h3>${t} <span class="tag ${EV[k] ? 'paid' : 'info'}" style="margin-left:8px;vertical-align:middle">${EV[k] ? 'Proven on testnet' : 'Tested offline'}</span></h3><p>${d}</p></div><button class="btn sm" data-s="${k}">Run</button><div class="out" id="out-${k}"></div></div>`;
     const keys = ['Send NEAR out of the account', 'Add a new key to the account', 'Pause or unpause the contract', 'Create its own approval', 'Change the revenue split', 'Call any other contract'];
     return `<h1 class="in">Security lab</h1>
-    <p class="lede in">Try to rob the business. Each run travels along the path of four gates and stops where it is caught.</p>
+    <p class="lede in">Try to rob the business. Each run travels along the path of four checks and stops where it is caught.</p>
     <section class="slab in"><div class="sechead" style="margin-bottom:4px"><h2>Attacks</h2><button class="btn ghost sm" id="runall">Run all five</button></div>${A.map(row).join('')}</section>
     <section class="slab in"><h2 style="margin-bottom:4px">Normal payments</h2>${N.map(row).join('')}</section>
     <section class="slab in"><h2>What the AI's key can do</h2><p class="sub" style="margin-bottom:10px">The AI holds a restricted key that can call one thing: <b style="color:#fff">pay</b>. These actions were tried with it on testnet and refused by the network itself.</p>
       <table class="keys">${keys.map((k) => `<tr><td>${k}</td><td><span class="tag stopped">Refused</span></td></tr>`).join('')}</table>
       <p class="sub" style="margin-top:12px">Reproduce with <code>npm run key-limits</code>.</p></section>
-    <div class="honest in"><b>What is real and what is not.</b> Payments, limits, approvals and the split are enforced by a contract on NEAR testnet. The look-alike check is a heuristic in the guard, not in the contract. Without an API key the AI is a scripted stand-in that obeys any instruction. Owner changes run from the command line on testnet. The contract has not been audited and handles native NEAR only.</div>`;
+    <div class="honest in"><b>What is real and what is not.</b> Payments, limits, approvals and the split are enforced by a contract on NEAR testnet. The look-alike check is a rule of thumb in the guard, not in the contract. Without an API key the AI is a scripted stand-in that obeys any instruction. Owner approvals are signed in your wallet; other owner changes run from the command line on testnet. The contract has not been audited and handles native NEAR only.</div>`;
   },
 };
 
@@ -291,6 +292,7 @@ function bind(r) {
       b.disabled = false; b.textContent = 'Read this invoice'; busy = false;
     };
   }
+  if (r === 'activity' && $('csv')) $('csv').onclick = exportCsv;
   if (r === 'approvals') {
     bindWalletApprove(); document.querySelectorAll('[data-cancel]').forEach((b) => { b.onclick = () => cancelWallet(b.dataset.cancel); });
     const upd = () => { const a = [$('aref').value.trim(), $('ato').value.trim(), $('aamt').value.trim()]; $('acmd').textContent = cmdLine(`approve ${a[0]} ${a[1]} ${a[2]} 7200`); };
@@ -330,6 +332,13 @@ function placeNav() {
   hl.style.transform = `translateY(${a.parentElement.offsetTop}px)`; hl.style.opacity = 1;
 }
 
+function exportCsv() {
+  const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [['time', 'mode', 'what', 'outcome', 'stopped_at', 'result', 'to', 'amount_near', 'transaction']];
+  for (const a of S.activity) rows.push([new Date(a.at).toISOString(), a.mode, a.label, a.outcome, a.stoppedAt || '', a.headline, a.to || '', a.amount || '', a.tx || '']);
+  const blob = new Blob([rows.map((r) => r.map(q).join(',')).join('\n')], { type: 'text/csv' });
+  const u = document.createElement('a'); u.href = URL.createObjectURL(blob); u.download = 'trustpal-records.csv'; u.click(); setTimeout(() => URL.revokeObjectURL(u.href), 1000);
+}
 /* ---- wallet (real testnet transactions, signed inside the person's own wallet) ---- */
 let walletAcct = null, walletErr = '', walletBusy = false;
 const isOwnerAcct = () => walletAcct && S.walletOwner && walletAcct === S.walletOwner;
@@ -339,7 +348,7 @@ function ribbonHtml() {
   const chip = walletAcct
     ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'View only'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
     : `<button class="wchip" id="wconn"><i></i>Connect wallet</button>`;
-  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. This page never holds your owner key; owner changes are commands you run yourself.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
+  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. This page never holds your owner key. Approvals are signed in your wallet; other owner changes are commands you run yourself.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
 }
 function bindWallet() {
   const c = $('wconn'), o = $('wout');
@@ -375,7 +384,7 @@ function bindWalletApprove() {
   const ap = $('wapprove'); if (!ap) return;
   ap.onclick = () => {
     const ref = $('aref').value.trim(), to = $('ato').value.trim(), amt = $('aamt').value.trim(), hrs = parseFloat($('whrs').value);
-    const bad = !ref ? 'Enter an invoice reference' : !/^[a-z0-9._-]{2,64}$/.test(to) ? 'Enter the payee account, like alex.testnet' : !num(amt) ? 'Enter the amount as a number, like 0.5' : !(hrs > 0 && hrs <= 720) ? 'Valid for must be between 0 and 720 hours' : '';
+    const bad = !ref ? 'Enter an invoice number' : !/^[a-z0-9._-]{2,64}$/.test(to) ? 'Enter the payee account, like alex.testnet' : !num(amt) ? 'Enter the amount as a number, like 0.5' : !(hrs > 0 && hrs <= 720) ? 'Valid for must be between 0 and 720 hours' : '';
     if (bad) { toast(bad); return; }
     const box = $('wconfirm'); box.hidden = false;
     box.innerHTML = `<h3>Check every line</h3><dl><div><dt>Invoice</dt><dd>${esc(ref)}</dd></div><div><dt>Pay to</dt><dd>${esc(to)}</dd></div><div><dt>Amount</dt><dd>${esc(amt)} NEAR</dd></div><div><dt>Valid for</dt><dd>${hrs} hours, one use</dd></div></dl><p class="note">The contract will pay exactly this and nothing else. If any line is wrong, cancel and fix it.</p><div class="row"><button class="btn" id="wgo">Confirm in my wallet</button><button class="btn ghost" id="wno">Cancel</button></div><p class="note" id="wmsg"></p>`;
@@ -390,7 +399,7 @@ function bindWalletApprove() {
 }
 function friendlyWalletError(m) {
   if (/owner/i.test(m)) return 'The contract refused this: only the owner account can approve. Connect the owner wallet.';
-  if (/already/i.test(m)) return 'The contract refused this: that invoice reference was already used or approved. Use a new reference.';
+  if (/already/i.test(m)) return 'The contract refused this: that invoice number was already used or approved. Use a new reference.';
   return 'The wallet or contract refused this: ' + m;
 }
 async function cancelWallet(ref) {
