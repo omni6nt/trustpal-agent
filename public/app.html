@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trustpal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/wallet-modal.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2306141B'/%3E%3Crect x='6' y='7' width='20' height='8' rx='4' fill='%23CCD0CF'/%3E%3Crect x='6' y='12' width='20' height='8' rx='4' fill='%239BA8AB'/%3E%3Crect x='6' y='17' width='20' height='8' rx='4' fill='%234A5C6A'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="ambient" aria-hidden="true"></div>
+<a class="skiplink" href="#main">Skip to content</a>
+<div class="app">
+  <nav class="nav" aria-label="Main">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="4" width="26" height="10" rx="5" fill="#4A5C6A"/><rect x="3" y="11" width="26" height="10" rx="5" fill="#9BA8AB"/><rect x="3" y="18" width="26" height="10" rx="5" fill="#CCD0CF"/></svg>
+      <span>Trustpal</span>
+    </div>
+    <ul id="navlist">
+      <i class="navhl" id="navhl" aria-hidden="true"></i>
+      <li><a href="#overview" data-r="overview"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Overview</a></li>
+      <li><a href="#invoices" data-r="invoices"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z M14 3v5h5 M10 13h6 M10 17h6"/></svg>Invoices</a></li>
+      <li><a href="#approvals" data-r="approvals"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>Approvals</a></li>
+      <li class="x"><a href="#revenue" data-r="revenue"><svg viewBox="0 0 24 24"><path d="M12 3v9h9A9 9 0 1 1 12 3z M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Revenue split</a></li>
+      <li class="x"><a href="#authority" data-r="authority"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="3"/><rect x="13" y="4" width="8" height="7" rx="3"/><rect x="3" y="13" width="8" height="7" rx="3"/><rect x="13" y="13" width="8" height="7" rx="3"/></svg>Who can do what</a></li>
+      <li><a href="#owner" data-r="owner"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4"/><path d="M12 12h9 M18 12v3 M15 12v2"/></svg><span class="nm-long">Owner settings</span><span class="nm-short">Owner</span></a></li>
+      <li class="x"><a href="#activity" data-r="activity"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Activity</a></li>
+      <li class="x"><a href="#security" data-r="security"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Security lab</a></li>
+      <li class="more-li"><button id="morebtn" class="morebtn"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button></li>
+    </ul>
+    <div class="netbox"><span class="net" id="net"><i></i><b id="netlabel">Loading</b></span><span class="acct" id="acct"></span></div>
+  </nav>
+
+  <div class="sheet" id="sheet"><a href="#authority" data-r="authority">Who can do what</a><a href="#revenue" data-r="revenue">Revenue split</a><a href="#activity" data-r="activity">Activity</a><a href="#security" data-r="security">Security lab</a></div>
+  <main id="main" tabindex="-1"></main>
+
+  <aside class="aside" aria-label="How every payment is decided">
+    <p class="aside-title">The path every payment takes</p>
+    <div class="stack" id="stack">
+      <div class="pill l0"><b>AI agent</b><span>reads invoices, proposes payments</span></div>
+      <div class="pill l1"><b>Guard</b><span>checks who is being paid</span></div>
+      <div class="pill l2"><b>Owner's rules</b><span>approved invoice or payee list</span></div>
+      <div class="pill l3"><b>Contract</b><span>has the final say</span></div>
+      <div class="overlay" id="overlay">
+        <div class="spine" id="spine"></div><div class="lit" id="lit"></div>
+        <i class="gate"></i><i class="gate"></i><i class="gate"></i><i class="gate"></i>
+        <div class="dot" id="dot"></div>
+      </div>
+    </div>
+    <p class="verdict" id="caption" role="status" aria-live="polite">Run a payment to watch it travel down.</p>
+    <div class="keyline"><p><b>What the AI holds</b>One key that can only call pay.</p><p><b>What it never holds</b>Your owner key, or any way to change the rules.</p></div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/wallet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

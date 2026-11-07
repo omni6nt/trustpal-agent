@@ -230,6 +230,8 @@ async function state() {
     network: live ? 'testnet' : 'offline',
     contract: live ? process.env.POLICY_ID : 'policy.mock',
     owner: live ? process.env.OWNER_ID : 'owner.testnet',
+    walletContract: process.env.POLICY_ID ?? 'omni6nt-policy3.testnet',
+    walletOwner: process.env.OWNER_ID ?? 'omni6nt-owner.testnet',
     attacker: ATTACKER,
     recipients: await chain.recipients(),
     maxPerPaymentNear: yoctoToNear(p.maxPerPayment),
@@ -245,7 +247,7 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (!url.pathname.startsWith('/api/')) {
-      const rel = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^([/\\]|\.\.)+/, '');
+      const rel = url.pathname === '/' ? 'index.html' : url.pathname === '/app' ? 'app.html' : normalize(url.pathname).replace(/^([/\\]|\.\.)+/, '');
       const file = join('public', rel);
       if (!file.startsWith('public') || !existsSync(file)) { res.writeHead(404); res.end('not found'); return; }
       const types: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };

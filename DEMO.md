@@ -55,3 +55,15 @@ near contract call-function as-read-only omni6nt-policy3.testnet get_policy json
 ## What the demo does not show
 
 Mainnet, stablecoins, wallet-signed approvals and login. See the honest limits in `DEFENCE_NOTE.md`.
+
+## Approve from the dashboard with a wallet (testnet)
+
+The dashboard can send the owner's approval itself. The page never sees a private key: the wallet signs.
+
+1. Open the dashboard, go to **Approvals**, press **Connect wallet**, and pick Meteor or MyNearWallet (switch the wallet to **testnet** first).
+2. A wallet that is not the owner account connects as **View only**. It can look around, and the contract would refuse its approvals.
+3. The owner account (`omni6nt-owner.testnet`) connects as **Owner**. Fill in the invoice, payee and amount, press **Review and approve**, check every line, then **Confirm in my wallet**.
+4. This is a real testnet transaction even when the dashboard is in practice mode. The link under the form opens it on the NEAR testnet explorer.
+5. Rebuild the wallet code after changing `wallet/wallet.js` with `npm run build:wallet`.
+
+Safety notes: sign-in asks the wallet for a key limited to the read method `get_policy`, so the page holds no key that can approve or pay. Check this under the owner account's **Access Keys** on the explorer. Every approval opens your wallet for a fresh confirmation.

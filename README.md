@@ -42,7 +42,7 @@ If the AI is fooled: the contract still enforces the owner's approval.
 ```bash
 npm install
 npm test
-npm run web          # dashboard, practice mode, http://localhost:3000
+npm run web          # landing page + dashboard (practice mode): http://localhost:3000
 ```
 
 The full 5-minute walkthrough is in [DEMO.md](DEMO.md).

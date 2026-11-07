@@ -148,10 +148,11 @@ const screens = {
       <div id="invres" style="margin-top:14px"></div></section>`;
   },
   approvals() {
-    const list = S.approvals.length ? S.approvals.map((a) => `<div class="appr"><div><h3>${esc(a.ref)}</h3><p class="sub" style="word-break:break-all">to ${esc(a.to)}</p><p class="sub">${a.minutesLeft} min left. One use, exact amount.</p></div><div class="amt num">${fmt(a.amount)} <span class="sub">NEAR</span></div></div>`).join('') : `<div class="empty">No approved invoices are open. Approve one below and the AI can pay exactly that, once.</div>`;
+    const list = S.approvals.length ? S.approvals.map((a) => `<div class="appr"><div><h3>${esc(a.ref)}</h3><p class="sub" style="word-break:break-all">to ${esc(a.to)}</p><p class="sub">${a.minutesLeft} min left. One use, exact amount.</p></div><div class="amt num">${fmt(a.amount)} <span class="sub">NEAR</span>${isOwnerAcct() && S.network === 'testnet' ? `<button class="btn ghost sm" data-cancel="${esc(a.ref)}" style="margin-top:8px">Cancel</button>` : ''}</div></div>`).join('') : `<div class="empty">No approved invoices are open. Approve one below and the AI can pay exactly that, once.</div>`;
     return `<h1 class="in">Approvals</h1>
-    <p class="lede in">An approval says: pay this person this exact amount for this invoice, once. If anything differs, even one letter of the address, the contract refuses.</p>
+    <p class="lede in">An approval says: pay this person this exact amount for this invoice, once. The contract checks that the payment exactly matches the approved recipient, amount, invoice reference and deadline. Any difference and it refuses.</p>
     <section class="slab in" style="padding-top:12px;padding-bottom:12px">${list}</section>
+    <section class="slab in"><h2>Approve with your wallet</h2>${walletApproveBlock()}</section>
     <section class="slab in"><h2>Approve a payment</h2>
       <p class="sub" style="margin-bottom:18px">${S.canEdit ? 'Practice mode applies it instantly. The same approval on testnet needs your owner key, so copy the command below.' : 'Approving needs your owner key, which the AI never has. Fill this in and run the command in your Codespace.'}</p>
       <div class="formgrid"><label>Invoice reference<input id="aref" value="INV-2001"></label><label>Pay to<input id="ato" value="${esc(S.recipients[0] || '')}"></label><label>Amount (NEAR)<input id="aamt" value="0.5" inputmode="decimal"></label></div>
@@ -222,7 +223,7 @@ async function ownerDo(body, cmd, msg = 'Saved') {
   const r = await api('/api/owner', { method: 'POST', body: JSON.stringify(body) });
   await refresh(); toast(msg); return r;
 }
-function rerender() { const y = scrollY; $('main').classList.add('still'); $('main').innerHTML = screens[route](); bind(route); scrollTo(0, y); }
+function rerender() { const y = scrollY; $('main').classList.add('still'); $('main').innerHTML = screens[route](); $('main').insertAdjacentHTML('afterbegin', ribbonHtml()); bind(route); bindWallet(); scrollTo(0, y); }
 const num = (v) => { const s = String(v).trim(); return /^\d+(\.\d+)?$/.test(s) ? s : null; };
 
 /* ================= wiring ================= */
@@ -291,6 +292,7 @@ function bind(r) {
     };
   }
   if (r === 'approvals') {
+    bindWalletApprove(); document.querySelectorAll('[data-cancel]').forEach((b) => { b.onclick = () => cancelWallet(b.dataset.cancel); });
     const upd = () => { const a = [$('aref').value.trim(), $('ato').value.trim(), $('aamt').value.trim()]; $('acmd').textContent = cmdLine(`approve ${a[0]} ${a[1]} ${a[2]} 7200`); };
     ['aref', 'ato', 'aamt'].forEach((i) => $(i).addEventListener('input', upd)); upd();
     const ap = $('aapply'); if (ap) ap.onclick = async () => { const amt = num($('aamt').value); if (!amt) { $('aerr').className = 'note bad'; $('aerr').textContent = 'Enter the amount as a number, like 0.5'; return; } try { await ownerDo({ action: 'approve', reference: $('aref').value, recipient: $('ato').value.trim(), amount: amt, seconds: 7200 }, '', 'Approved'); rerender(); } catch (e) { $('aerr').className = 'note bad'; $('aerr').textContent = e.message; } };
@@ -327,15 +329,83 @@ function placeNav() {
   const a = document.querySelector('.nav a.on'), hl = $('navhl'); if (!a) return;
   hl.style.transform = `translateY(${a.parentElement.offsetTop}px)`; hl.style.opacity = 1;
 }
+
+/* ---- wallet (real testnet transactions, signed inside the person's own wallet) ---- */
+let walletAcct = null, walletErr = '', walletBusy = false;
+const isOwnerAcct = () => walletAcct && S.walletOwner && walletAcct === S.walletOwner;
+const explorerTx = (h) => `https://testnet.nearblocks.io/txns/${h}`;
+function ribbonHtml() {
+  const live = S.network === 'testnet';
+  const chip = walletAcct
+    ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'View only'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
+    : `<button class="wchip" id="wconn"><i></i>Connect wallet</button>`;
+  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. This page never holds your owner key; owner changes are commands you run yourself.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
+}
+function bindWallet() {
+  const c = $('wconn'), o = $('wout');
+  if (c) c.onclick = () => { if (!window.TrustpalWallet || walletErr) { toast(walletErr || 'The wallet code is still loading'); return; } TrustpalWallet.connect(); };
+  if (o) o.onclick = async () => { try { await TrustpalWallet.disconnect(); } catch { /* ignore */ } };
+}
+async function walletInit() {
+  try { await refresh(); } catch { /* the server message is shown by show() */ }
+  if (!window.TrustpalWallet) { walletErr = 'Wallet code did not load. Run npm run build:wallet.'; return; }
+  try {
+    const r = await TrustpalWallet.init(S.walletContract);
+    walletAcct = TrustpalWallet.account();
+    TrustpalWallet.onChange((a) => { walletAcct = a; refreshChrome(); });
+    if (r.returnedTx) toast('Sent to testnet. See it in the activity list.');
+    if (r.returnedTx) lastWalletTx = r.returnedTx;
+    refreshChrome();
+  } catch (e) { walletErr = 'Wallet could not start: ' + e.message; }
+}
+let lastWalletTx = '';
+function refreshChrome() { const rb = document.querySelector('.ribbon'); if (rb) { rb.outerHTML = ribbonHtml(); bindWallet(); } if (route === 'approvals') rerender(); }
+function walletApproveBlock() {
+  if (walletErr) return `<p class="note bad">${esc(walletErr)}</p>`;
+  const tx = lastWalletTx ? `<p class="note ok">Last transaction: <a href="${explorerTx(lastWalletTx)}" target="_blank" rel="noopener">${esc(lastWalletTx.slice(0, 10))}… on the NEAR testnet explorer</a></p>` : '';
+  if (!walletAcct) return `<p class="sub">Connect the wallet that holds <b>${esc(S.walletOwner)}</b>. Nothing is sent until you confirm inside your wallet.</p><div class="row" style="margin-top:14px"><button class="btn" id="wconn2">Connect wallet</button></div>${tx}`;
+  if (!isOwnerAcct()) return `<p class="sub">Connected as <b>${esc(walletAcct)}</b>. Only <b>${esc(S.walletOwner)}</b> can approve payments. This account can look around, and the contract would refuse an approval from it.</p>${tx}`;
+  return `<p class="sub">You are signed in as the owner. Review the exact payment, then confirm it in your wallet. This is a <b>real testnet transaction</b>, even in practice mode.</p>
+    <div class="formgrid" style="margin-top:14px"><label>Valid for (hours)<input id="whrs" value="2" inputmode="decimal"></label></div>
+    <div class="row" style="margin-top:14px"><button class="btn" id="wapprove">Review and approve</button></div>
+    <div class="confirm" id="wconfirm" hidden></div>${tx}`;
+}
+function bindWalletApprove() {
+  const c2 = $('wconn2'); if (c2) c2.onclick = () => { if (walletErr) { toast(walletErr); return; } TrustpalWallet.connect(); };
+  const ap = $('wapprove'); if (!ap) return;
+  ap.onclick = () => {
+    const ref = $('aref').value.trim(), to = $('ato').value.trim(), amt = $('aamt').value.trim(), hrs = parseFloat($('whrs').value);
+    const bad = !ref ? 'Enter an invoice reference' : !/^[a-z0-9._-]{2,64}$/.test(to) ? 'Enter the payee account, like alex.testnet' : !num(amt) ? 'Enter the amount as a number, like 0.5' : !(hrs > 0 && hrs <= 720) ? 'Valid for must be between 0 and 720 hours' : '';
+    if (bad) { toast(bad); return; }
+    const box = $('wconfirm'); box.hidden = false;
+    box.innerHTML = `<h3>Check every line</h3><dl><div><dt>Invoice</dt><dd>${esc(ref)}</dd></div><div><dt>Pay to</dt><dd>${esc(to)}</dd></div><div><dt>Amount</dt><dd>${esc(amt)} NEAR</dd></div><div><dt>Valid for</dt><dd>${hrs} hours, one use</dd></div></dl><p class="note">The contract will pay exactly this and nothing else. If any line is wrong, cancel and fix it.</p><div class="row"><button class="btn" id="wgo">Confirm in my wallet</button><button class="btn ghost" id="wno">Cancel</button></div><p class="note" id="wmsg"></p>`;
+    $('wno').onclick = () => { box.hidden = true; };
+    $('wgo').onclick = async () => {
+      if (walletBusy) return; walletBusy = true; $('wgo').disabled = true; $('wmsg').className = 'note'; $('wmsg').textContent = 'Waiting for your wallet…';
+      try { const r = await TrustpalWallet.approvePayment({ reference: ref, recipient: to, amountNear: amt, seconds: Math.round(hrs * 3600) }); if (r.hash) lastWalletTx = r.hash; toast('Approved on testnet'); await refresh(); rerender(); }
+      catch (e) { $('wmsg').className = 'note bad'; $('wmsg').textContent = friendlyWalletError(e.message); }
+      walletBusy = false;
+    };
+  };
+}
+function friendlyWalletError(m) {
+  if (/owner/i.test(m)) return 'The contract refused this: only the owner account can approve. Connect the owner wallet.';
+  if (/already/i.test(m)) return 'The contract refused this: that invoice reference was already used or approved. Use a new reference.';
+  return 'The wallet or contract refused this: ' + m;
+}
+async function cancelWallet(ref) {
+  if (!confirm(`Cancel the approval for ${ref}? The AI will no longer be able to pay it.`)) return;
+  try { const r = await TrustpalWallet.cancelApproval(ref); if (r.hash) lastWalletTx = r.hash; toast('Approval cancelled'); await refresh(); rerender(); } catch (e) { toast(friendlyWalletError(e.message)); }
+}
+
 async function show() {
   route = (location.hash.slice(1) in screens) ? location.hash.slice(1) : 'overview';
   document.querySelectorAll('[data-r]').forEach((a) => a.classList.toggle('on', a.dataset.r === route)); placeNav();
   try { await refresh(); } catch { $('main').innerHTML = '<div class="empty">Can\'t reach the Trustpal server. Is <code>npm run web</code> still running?</div>'; return; }
   document.body.dataset.route = route; layoutRail();
   const m = $('main'); m.classList.remove('still'); m.innerHTML = screens[route]();
-  const live = S.network === 'testnet';
-  m.insertAdjacentHTML('afterbegin', `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. This page never holds your owner key; owner changes are commands you run yourself.' : 'A simulation on your computer. Nothing here touches the network.'}</span></div>`);
-  m.querySelectorAll('.in').forEach((el, i) => el.style.setProperty('--i', i)); bind(route); scrollTo(0, 0);
+  m.insertAdjacentHTML('afterbegin', ribbonHtml());
+  m.querySelectorAll('.in').forEach((el, i) => el.style.setProperty('--i', i)); bind(route); bindWallet(); scrollTo(0, 0);
 }
 addEventListener('hashchange', () => { sheet.classList.remove('open'); show(); });
 addEventListener('resize', () => { layoutRail(); placeNav(); });
@@ -346,4 +416,4 @@ if (!reduced && matchMedia('(pointer:fine)').matches) {
 }
 layoutRail();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { layoutRail(); placeNav(); });
-show().then(() => { layoutRail(); placeNav(); let seen = false; try { seen = !!sessionStorage.getItem('seen'); sessionStorage.setItem('seen', '1'); } catch { /* ignore */ } if (!seen) railIdle(); });
+walletInit().then(() => show()).then(() => { layoutRail(); placeNav(); let seen = false; try { seen = !!sessionStorage.getItem('seen'); sessionStorage.setItem('seen', '1'); } catch { /* ignore */ } if (!seen) railIdle(); });

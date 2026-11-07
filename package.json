@@ -16,10 +16,22 @@
     "keygen": "node scripts/keygen.ts",
     "attack": "node src/attack.ts",
     "key-limits": "node scripts/key-limits.ts",
-    "web": "node src/web.ts"
+    "web": "node src/web.ts",
+    "build:wallet": "node wallet/build.mjs"
   },
   "dependencies": {
     "@defuse-protocol/one-click-sdk-typescript": "^0.1.13",
     "near-api-js": "^7.4.0"
+  },
+  "devDependencies": {
+    "@near-js/transactions": "^2.5.1",
+    "@near-wallet-selector/core": "^10.1.4",
+    "@near-wallet-selector/meteor-wallet": "^10.1.4",
+    "@near-wallet-selector/modal-ui": "^10.1.4",
+    "@near-wallet-selector/my-near-wallet": "^10.1.4",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.28.2",
+    "process": "^0.11.10",
+    "util": "^0.12.5"
   }
 }
