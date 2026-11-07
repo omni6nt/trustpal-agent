@@ -8,6 +8,9 @@
 #   cancel   REF                                   withdraw an approval
 #   split    ACCOUNT:BPS ACCOUNT:BPS ...           set the revenue split (bps total at most 10000; the rest stays in the treasury)
 #   client-pay AMOUNT_NEAR MEMO                    pay the business (anyone can); money is split at once
+#   limits   MAX_NEAR DAILY_NEAR                    per-payment and daily spending limits
+#   cooldown SECONDS                               how long a NEW payee must wait before the AI can pay them
+#   recipient-add ACCOUNT | recipient-remove ACCOUNT   the payees the AI may pay
 #   pause | unpause                                kill switch
 set -euo pipefail
 : "${POLICY:?set POLICY}" "${OWNER:?set OWNER}"
@@ -32,7 +35,11 @@ case "$cmd" in
     call set_split "{\"shares\":$json]}" '0 NEAR' ;;
   client-pay)
     call receive_revenue "{\"memo\":\"$2\"}" "$1 NEAR" ;;
+  limits)  call set_limits "{\"max_per_payment\":\"$(yocto "$1")\",\"daily_cap\":\"$(yocto "$2")\"}" '0 NEAR' ;;
+  cooldown) call set_cooldown "{\"cooldown_seconds\":$1}" '0 NEAR' ;;
+  recipient-add) call add_recipient "{\"account_id\":\"$1\"}" '0 NEAR' ;;
+  recipient-remove) call remove_recipient "{\"account_id\":\"$1\"}" '0 NEAR' ;;
   pause)   call set_paused '{"paused":true}' '0 NEAR' ;;
   unpause) call set_paused '{"paused":false}' '0 NEAR' ;;
-  *) echo "usage: owner.sh approve|cancel|split|client-pay|pause|unpause ..."; exit 1 ;;
+  *) echo "usage: owner.sh approve|cancel|split|client-pay|limits|cooldown|recipient-add|recipient-remove|pause|unpause ..."; exit 1 ;;
 esac

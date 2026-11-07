@@ -1,99 +1,79 @@
-# Trustpal Agent
+# Trustpal
 
-**An AI payment agent that can prepare payments but cannot overspend or pay the wrong address.**
+**A business an AI can run but cannot rob.**
 
-Built for NEAR HACKATHON (Nov 2026). Tracks: **AI Security & Defense** (lead) and Real-World Money.
+Trustpal gives an AI a role in a small business's payment operations without giving it unrestricted control of the business's money. The AI reads invoices and proposes payments. The owner approves the exact payment. A smart contract on NEAR is the only thing that can move money, and it enforces the owner's rules whatever the AI is told.
 
-> Status: working prototype on NEAR **testnet**. This README says what is verified, what is mocked and what is not built. See [THREAT_MODEL.md](THREAT_MODEL.md).
+Built for NEAR HACKATHON, Nov 2026. Tracks: Autonomous Business (lead), Real-World Money, AI Security & Defense.
 
-## The problem
+## The story in 30 seconds
 
-An AI agent that can move money is only as safe as the weakest text it reads. A poisoned invoice, a pasted message or a hijacked tool can tell it to pay an attacker. Prompts and guardrails are not a security boundary.
+A small studio receives 10 NEAR from a client. The contract splits it at once: shares go to collaborators, the rest stays in the treasury. Later a contractor sends an invoice. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract refuses, because the owner never approved that exact payment.
 
-## The idea
+## How it works
 
-**The AI proposes. A NEAR contract decides.**
+```
+CLIENT ──pays──▶ TRUSTPAL CONTRACT ──fixed split──▶ collaborators + treasury
 
-1. Funds sit in a small **policy contract** (`contract/`), not in the agent's wallet.
-2. The contract enforces, on chain: an approved-recipient list, a per-payment cap, a daily cap (reserved before the transfer), single-use payment references and a pause switch.
-3. The agent holds only a NEAR **function-call key** limited to `pay` on that contract. It cannot send NEAR, add keys or call anything else.
-4. Before signing, a **guard** checks the counterparty (ALLOW / WARN / BLOCK, with reasons). BLOCK refuses; WARN asks a human.
-5. Every attempt, allowed or refused, goes into a hash-chained audit log.
+INVOICE ─▶ AI agent ─▶ Guard ─▶ Owner's rules ─▶ Contract ─▶ payment
+ (proposes)  (checks payee)  (exact approval     (final say)
+                              or payee list)
 
-Even if the guard and the AI are fully compromised, the contract still refuses.
+If the AI is fooled: the contract still enforces the owner's approval.
+```
 
-## What is verified
+- **Exact-payment approval.** The owner approves reference, recipient, amount and expiry. The contract verifies the request exactly matches it, then consumes it. One use only.
+- **A restricted AI key.** The agent key lives on the owner's account but NEAR limits it to calling `pay` on the policy contract. It cannot approve, change limits, change the split, add keys or call other contracts.
+- **Limits and payees.** Per-payment limit, daily limit, a payee list, a wait before a new payee can be paid, a pause switch.
+- **Revenue split.** Incoming client payments are divided by rules only the owner can change. The AI cannot change the percentages.
+- **Guard.** Application-level checks (look-alike addresses, blocklist, account exists). Useful but advisory: the contract does not depend on it.
+- **Activity log.** Hash-chained, so edited history is detected.
 
-| Claim | Evidence |
-|---|---|
-| Real payments on testnet from the policy contract | `npm run web -- --live`, button 1; visible on the NEAR explorer |
-| Contract rejects unapproved recipients and over-limit amounts | web demo buttons 3 and 4; `npm run attack -- --live` |
-| Agent key cannot transfer NEAR, add keys, call other methods or contracts | `npm run key-limits` |
-| Guard refuses a poisoned invoice | web demo button 2; `npm run attack` |
-| 27 offline JS tests, 10 contract unit tests | `npm test`; `cd contract && cargo test` |
+## What is proven, and how
 
-## Try it
+| Group | What | Detail |
+| --- | --- | --- |
+| **Live on NEAR testnet** | Fraud refused; approved invoice paid; replay rejected; AI key refused 6 of 6 forbidden actions; revenue split 0.5 / 0.2 / 0.3 | Transaction ids and steps in [DEMO.md](DEMO.md) |
+| **Tested offline** | 28 contract unit tests, 42 application tests, the dashboard | `npm test` |
+| **Simulated / prototype** | Scripted AI (unless an API key is set); dashboard practice mode; animation is a replay of the real result | Labelled on every dashboard screen |
 
-Requires Node.js 22.18+.
+## Run it
 
 ```bash
-git clone https://github.com/omni6nt/trustpal-agent.git
-cd trustpal-agent
 npm install
-npm test            # expect: pass 27, fail 0
-npm run attack      # offline mock of the contract rules
-npm run web         # open http://localhost:3000
+npm test
+npm run web          # dashboard, practice mode, http://localhost:3000
 ```
 
-Offline mode uses a mock that applies the same rules as the contract. It is a demo aid, not the security boundary.
+The full 5-minute walkthrough is in [DEMO.md](DEMO.md).
 
-### Live on testnet
+Live testnet: copy `.env.example` to `.env` with the agent key and accounts, then `npm run web -- --live`. To rebuild the deployment from scratch, run `scripts/setup-testnet.sh` (needs near-cli-rs and cargo-near).
 
-You need your own testnet accounts and a deployed contract (`contract/`, build with `cargo near build`).
+## The dashboard
 
-```bash
-npm run keygen      # saves the private key to .env, prints only the public key
-# add that public key to your account as a function-call key limited to `pay`
-# then set OWNER_ID, POLICY_ID, LEGIT_ID in .env
-npm run web -- --live
-npm run key-limits
-```
+Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can do what, Owner settings, Activity and Security lab. A bar of four gates shows where each payment is stopped. Every screen says whether it is a practice-mode simulation or live testnet. The page never holds the owner key: on testnet, owner changes are printed as commands for `scripts/owner.sh`.
 
-Never commit `.env` or paste a private key anywhere.
+## Repo map
 
-## NOT built yet
+| Path | What |
+| --- | --- |
+| `contract/` | Rust smart contract (near-sdk 5), 28 unit tests |
+| `src/chain.ts` | Chain interface, offline mock chain, NEAR testnet client |
+| `src/guard.ts`, `src/counterparty.ts` | Payee checks and the payment guard |
+| `src/assistant.ts` | AI layer: scripted stand-in, optional real Claude model |
+| `src/trust.ts` | Hash-chained activity log |
+| `src/web.ts`, `public/` | Dashboard server and site |
+| `scripts/` | `owner.sh`, `setup-testnet.sh`, `keygen.ts`, `key-limits.ts` |
+| `DEMO.md` | Judge walkthrough |
+| `DEFENCE_NOTE.md` | Full defence note |
+| `THREAT_MODEL.md` | Attacks, defences, assumptions |
 
-- No fungible-token (stablecoin) payments; native NEAR only.
-- No cross-chain payouts. NEAR Intents has no testnet; `src/swap.ts` is an older prototype path, written from docs and never tested live.
-- No global reputation or scam database. The counterparty check uses the owner's approved list, a local evidence-backed blocklist and our own payment history.
-- No Nigerian bank payout. Any naira figure in the old demo is indicative only.
-- The contract is not audited.
+## Honest limits
 
-## NEAR technologies
+Testnet only. Not audited. Native NEAR only (NEP-141 stablecoins are the next step for the Real-World Money track). The owner key is the master key: if stolen, every rule can be changed; a hardware wallet or multisig owner is the intended next step. Owner approvals use the command line, not a wallet popup. The look-alike check is a heuristic in the guard; the contract does not need it, because unapproved addresses are rejected anyway. The AI is a scripted stand-in unless an API key is set. The code was written with AI assistance (Claude); the deployment and every live test were run by the team.
 
-- A custom NEAR smart contract (Rust, `near-sdk` 5) deployed on testnet.
-- NEAR function-call access keys for the agent's restricted authority.
-- `near-api-js` for the agent's calls and views.
-- NEAR Intents 1Click API (dry-run quotes, prototype only).
-
-## AI use
-
-This project was built with AI assistance (Claude, ChatGPT). Code is reviewed and tested by the authors. The demo "AI" that gets manipulated is a deliberate script, not a model.
-
-## Layout
-
-```
-contract/src/lib.rs     policy contract (Rust)
-src/chain.ts            chain adapter: MockChain and NearChain (restricted key)
-src/counterparty.ts     ALLOW / WARN / BLOCK checks
-src/guard.ts            wrapper around the only action that moves money
-src/attack.ts           prompt-injection demo
-src/web.ts              local demo page
-src/trust.ts            hash-chained audit ledger
-scripts/keygen.ts       creates the agent key (never prints it)
-scripts/key-limits.ts   proves what the agent key cannot do
-```
+See [DEFENCE_NOTE.md](DEFENCE_NOTE.md) for the full list.
 
 ## License
 
-MIT
+MIT, see `LICENSE`.

@@ -60,6 +60,8 @@ export interface Chain {
   split(): Promise<SplitShare[]>;
   /** What the chain says about an address: does it exist, is it a contract. */
   accountInfo(address: string): Promise<AccountInfo>;
+  /** NEAR held by the policy contract (the treasury). */
+  treasuryBalance(): Promise<bigint>;
   pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome>;
 }
 
@@ -91,6 +93,14 @@ export class MockChain implements Chain {
   approvePayment(reference: string, recipient: string, amount: bigint, seconds: number) {
     this.approvals.set(reference, { reference, recipient, amount, expiresMs: this.now() + seconds * 1000 });
   }
+  setLimits(max: bigint, cap: bigint) {
+    if (max <= 0n) throw new Error('Max per payment must be above zero');
+    if (cap < max) throw new Error('Daily limit cannot be lower than the per-payment limit');
+    this.max = max; this.cap = cap;
+  }
+  addRecipient(a: string) { if (!this.allow.has(a)) { this.allow.add(a); this.approvedAtMs.set(a, this.now()); } }
+  removeRecipient(a: string) { this.allow.delete(a); this.approvedAtMs.delete(a); }
+  setPaused(p: boolean) { this.paused = p; }
   setSplit(shares: SplitShare[]) {
     if (shares.reduce((s, x) => s + x.bps, 0) > 10_000) throw new Error('Shares cannot add up to more than 10000 basis points');
     this.shares = shares;
@@ -108,6 +118,7 @@ export class MockChain implements Chain {
     this.balance += amount - paid;
     return { payouts, retained: amount - paid };
   }
+  async treasuryBalance() { return this.balance; }
   async recipients() { return [...this.allow]; }
   async approval(r: string) { return this.approvals.get(r) ?? null; }
   async listApprovals() { return [...this.approvals.values()]; }
@@ -202,6 +213,10 @@ export class NearChain implements Chain {
   }
   async split(): Promise<SplitShare[]> {
     return (await this.view<any[]>('get_split', {})).map((s) => ({ account: s.account_id, bps: Number(s.bps) }));
+  }
+  async treasuryBalance(): Promise<bigint> {
+    const v: any = await this.provider.viewAccount({ accountId: this.contractId });
+    return BigInt(v.amount ?? 0);
   }
   async accountInfo(a: string): Promise<AccountInfo> {
     try {
