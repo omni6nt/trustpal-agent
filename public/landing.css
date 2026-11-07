@@ -95,3 +95,9 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;max-wi
  .slab{padding:24px}.frame{transform:none!important;border-radius:20px}.final{padding:80px 20px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.rv{opacity:1;transform:none}.split div::before{width:calc(var(--w)*1%)}}
+
+@media (max-width:900px){
+ .steps{grid-template-columns:1fr;gap:10px}.steps li{padding:14px 18px 14px 64px;text-align:left;border-radius:99px}
+ .journey{padding:24px 18px 20px}
+}
+[hidden]{display:none!important}

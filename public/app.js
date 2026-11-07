@@ -75,6 +75,7 @@ const fmt = (n, d = 4) => { const x = Number(n); return Number.isFinite(x) ? x.t
 const when = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const tagFor = (o) => ({ paid: ['paid', 'Paid'], stopped: ['stopped', 'Stopped'], pending: ['pending', 'Waiting'], info: ['info', 'Note'] }[o] || ['info', o]);
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2200); }
+const liI = (t, ok) => `<li class="${ok ? 'can' : 'cant'}"><i></i>${esc(t)}</li>`;
 async function copy(text) { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Select the text and copy it'); } }
 async function api(path, opts) { const r = await fetch(path, opts); const j = await r.json(); if (!r.ok) throw new Error(j.error || j.headline || 'Request failed'); return j; }
 async function refresh() { S = await api('/api/state'); const live = S.network === 'testnet'; $('net').className = 'net' + (live ? ' live' : ''); $('netlabel').textContent = live ? 'NEAR testnet, live' : 'Practice mode'; $('acct').textContent = S.contract || ''; }
@@ -116,7 +117,7 @@ const screens = {
         <div class="k full"><b>Full-access key</b><span>You keep it. Every owner action.</span></div>
         <div class="k lim"><b>Agent key</b><span>Given to the AI. Can call pay on Trustpal and nothing else.</span></div></div>
       <p class="sub" style="margin-top:16px">If the AI's host is hacked, the thief holds only the agent key.</p>
-      <p style="margin:18px 0 0"><a class="btn ghost sm" href="#security" style="text-decoration:none">Try to break it in the Security lab</a></p></section>`;
+      <p style="margin:18px 0 0"><a class="btn ghost sm" href="#security" style="text-decoration:none">Try to break it</a></p></section>`;
   },
   overview() {
     const rules = [
@@ -186,6 +187,28 @@ const screens = {
       <section class="slab in"><div class="sechead"><div><h2>Pause all payments</h2><p class="sub">The kill switch. While it is on, nothing leaves, whatever the AI asks.</p></div>
         <button class="switch" id="pause" role="switch" aria-checked="${S.paused}" aria-label="Pause all payments"><i></i></button></div>${cmdBox('pcmd', '')}</section>
     </div>`;
+  },
+  getpaid() {
+    const to = S.walletContract || S.contract;
+    const link = `${location.origin}/pay.html?to=${encodeURIComponent(to)}`;
+    return `<h1 class="in">Get paid</h1>
+    <p class="lede in">This is where your clients send money. It goes into your treasury, and your revenue split shares it out at once.</p>
+    <section class="slab in"><h2>Your payment address</h2><p class="sub" style="margin-bottom:14px">Your treasury is a contract on the NEAR test network.</p>${cmdBox('payaddr', to)}</section>
+    <section class="slab in"><h2>Your payment link</h2><p class="sub" style="margin-bottom:14px">Send this to a client. They open it, connect their wallet and pay. The split happens automatically.</p>${cmdBox('paylink', link)}
+      <div class="row" style="margin-top:14px"><a class="btn" href="${esc(link)}" target="_blank" rel="noopener" style="text-decoration:none">Open the payment page</a></div></section>
+    <section class="slab in"><h2>What happens when a client pays</h2><ul class="cc">${liI('The client pays through the link and confirms in their own wallet', true)}${liI('The contract splits the money by your revenue split in the same moment', true)}${liI('Whatever you do not hand out stays in your treasury', true)}${liI('A plain transfer to the address above lands in the treasury but is not split. Use the link.', false)}</ul></section>`;
+  },
+  agent() {
+    const src = (S.ai || '').startsWith('Claude') ? 'Claude, a real AI model' : 'A scripted stand-in (no API key set)';
+    const recent = (S.activity || []).slice(0, 5);
+    return `<h1 class="in">AI agent</h1>
+    <p class="lede in">The agent reads your invoices and prepares payments. It never decides what is safe to pay: you and the contract do.</p>
+    <div class="grid2"><section class="slab in"><h2>Which AI is working</h2><p class="sub">${esc(src)}</p><p class="note">${(S.ai || '').startsWith('Claude') ? 'It reads real invoice text.' : 'The stand-in is built to be easy to fool, so the defences get tested honestly. Setting ANTHROPIC_API_KEY switches to a real model.'}</p></section>
+    <section class="slab in"><h2>Its key</h2><p class="sub">A key on your account that can call <b style="color:#fff">pay</b> on Trustpal and nothing else.</p>${S.agentPubKey ? cmdBox('agentpk', S.agentPubKey) : '<p class="note">Practice mode has no real key. On testnet its public key shows here.</p>'}</section></div>
+    <section class="slab in"><h2>What it can do</h2><ul class="cc">${liI('Read invoices and emails you give it', true)}${liI('Propose payments', true)}${liI('Send a payment you approved, exactly as approved', true)}${liI('Pay people on your list, within your limits', true)}</ul></section>
+    <section class="slab in"><h2>What it cannot do</h2><ul class="cc">${liI('Approve its own payments', false)}${liI('Change your limits, your list or your split', false)}${liI('Add keys, send money freely or call other contracts', false)}</ul>
+      <p class="note" style="margin-top:12px">The network itself refused all six of those when we tried them with the agent's key.</p></section>
+    <section class="slab in"><h2>Recent work</h2>${recent.length ? `<ul class="tl">${recent.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">Nothing yet. Paste an invoice under Invoices.</div>'}</section>`;
   },
   activity() {
     return `<h1 class="in">Activity</h1>
@@ -327,7 +350,7 @@ const sheet = $('sheet'), moreBtn = $('morebtn');
 moreBtn.onclick = (e) => { e.stopPropagation(); sheet.classList.toggle('open'); };
 addEventListener('click', (e) => { if (!sheet.contains(e.target)) sheet.classList.remove('open'); });
 function placeNav() {
-  moreBtn.classList.toggle('on', ['authority', 'revenue', 'activity', 'security'].includes(route));
+  moreBtn.classList.toggle('on', ['getpaid', 'agent', 'authority', 'revenue', 'activity', 'security'].includes(route));
   const a = document.querySelector('.nav a.on'), hl = $('navhl'); if (!a) return;
   hl.style.transform = `translateY(${a.parentElement.offsetTop}px)`; hl.style.opacity = 1;
 }
@@ -370,11 +393,12 @@ async function walletInit() {
 let lastWalletTx = '';
 function refreshChrome() { const rb = document.querySelector('.ribbon'); if (rb) { rb.outerHTML = ribbonHtml(); bindWallet(); } if (route === 'approvals') rerender(); }
 function walletApproveBlock() {
+  if (S.network !== 'testnet') return `<p class="sub">Approving with a wallet works in live mode, where the dashboard reads your real contract on the NEAR test network. In practice mode, use the simulated approval below. See DEMO.md to start live mode.</p>`;
   if (walletErr) return `<p class="note bad">${esc(walletErr)}</p>`;
   const tx = lastWalletTx ? `<p class="note ok">Last transaction: <a href="${explorerTx(lastWalletTx)}" target="_blank" rel="noopener">${esc(lastWalletTx.slice(0, 10))}… on the NEAR testnet explorer</a></p>` : '';
   if (!walletAcct) return `<p class="sub">Connect the wallet that holds <b>${esc(S.walletOwner)}</b>. Nothing is sent until you confirm inside your wallet.</p><div class="row" style="margin-top:14px"><button class="btn" id="wconn2">Connect wallet</button></div>${tx}`;
   if (!isOwnerAcct()) return `<p class="sub">Connected as <b>${esc(walletAcct)}</b>. Only <b>${esc(S.walletOwner)}</b> can approve payments. This account can look around, and the contract would refuse an approval from it.</p>${tx}`;
-  return `<p class="sub">You are signed in as the owner. Review the exact payment, then confirm it in your wallet. This is a <b>real testnet transaction</b>, even in practice mode.</p>
+  return `<p class="sub">You are signed in as the owner. Review the exact payment, then confirm it in your wallet. This is a <b>real test-network transaction</b>.</p>
     <div class="formgrid" style="margin-top:14px"><label>Valid for (hours)<input id="whrs" value="2" inputmode="decimal"></label></div>
     <div class="row" style="margin-top:14px"><button class="btn" id="wapprove">Review and approve</button></div>
     <div class="confirm" id="wconfirm" hidden></div>${tx}`;

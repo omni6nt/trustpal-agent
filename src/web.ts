@@ -9,6 +9,7 @@ import { MockChain, NearChain, nearToYocto, yoctoToNear, type Chain } from './ch
 import { guardedPay } from './guard.ts';
 import { Ledger } from './trust.ts';
 import { extractPayments } from './assistant.ts';
+import { KeyPair } from 'near-api-js';
 
 const live = process.argv.includes('--live');
 if (existsSync('.env')) loadEnvFile('.env');
@@ -212,9 +213,14 @@ async function ownerAction(b: any) {
   return { applied: true };
 }
 
+function agentPubKey(): string {
+  try { return live && process.env.AGENT_KEY ? KeyPair.fromString(process.env.AGENT_KEY as any).getPublicKey().toString() : ''; } catch { return ''; }
+}
+
 async function state() {
   const p = await chain.policy();
   return {
+    agentPubKey: agentPubKey(),
     ai: process.env.ANTHROPIC_API_KEY ? 'Claude (real model)' : 'scripted stand-in (no API key)',
     sample: SAMPLE,
     mode: live ? 'NEAR TESTNET (real transactions)' : 'OFFLINE MOCK',

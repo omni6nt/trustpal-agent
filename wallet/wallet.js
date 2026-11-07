@@ -40,9 +40,9 @@ export const onChange = (f) => listeners.push(f);
 export const connect = () => modal.show();
 export async function disconnect() { const w = await selector.wallet(); await w.signOut(); emit(); }
 
-async function call(methodName, args) {
+async function call(methodName, args, depositYocto = 0n) {
   const w = await selector.wallet();
-  const out = await w.signAndSendTransaction({ receiverId: contractId, actions: [actionCreators.functionCall(methodName, args, GAS, 0n)] });
+  const out = await w.signAndSendTransaction({ receiverId: contractId, actions: [actionCreators.functionCall(methodName, args, GAS, depositYocto)] });
   const hash = out && (out.transaction?.hash || out.transaction_outcome?.id);
   const failure = out && out.status && out.status.Failure;
   if (failure) throw new Error(JSON.stringify(failure).replace(/\\"/g, '"').slice(0, 300));
@@ -51,3 +51,4 @@ async function call(methodName, args) {
 export const approvePayment = ({ reference, recipient, amountNear, seconds }) =>
   call('approve_payment', { reference, recipient, amount: toYocto(amountNear), valid_for_seconds: Number(seconds) });
 export const cancelApproval = (reference) => call('cancel_approval', { reference });
+export const payBusiness = ({ memo, amountNear }) => call('receive_revenue', { memo: String(memo || 'payment').slice(0, 64) }, BigInt(toYocto(amountNear)));
