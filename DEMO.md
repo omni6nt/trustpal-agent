@@ -1,12 +1,12 @@
 # Judge demo path (about 5 minutes)
 
-Two ways to see Trustpal. Start with A: it needs nothing but Node.
+Two ways to see Trustpal. Start with A: it needs nothing but Node 22.18 or newer (`node --version`).
 
 ## A. Practice mode (no wallet, no network)
 
 ```bash
 npm install
-npm test            # 42 tests should pass
+npm test            # 32 tests should pass
 npm run attack      # the attack suite against the offline chain
 npm run web         # open http://localhost:3000
 ```
@@ -35,7 +35,7 @@ Order of the live run:
 2. `npm run web -- --live`, then in Security lab run **Fraud on an approved invoice**. Refused by the guard, and rejected by the contract.
 3. Run **Pay the approved invoice**. Paid exactly as approved, confirmed by the contract.
 4. Run **Replay a paid invoice**. Rejected: reference already used.
-5. `npm run key-limits`. Six forbidden actions are tried with the AI's key. All six are refused by the network.
+5. `npm run key-limits`. Six forbidden actions are tried with the AI's key. The script first prints the key's real permission from the network, and counts only genuine NEAR permission errors as refusals; a network failure is reported as inconclusive.
 6. Client payment and split: `bash scripts/owner.sh client-pay 1 INV-3001`. The contract logs 0.5 to the contractor, 0.2 to the owner, 0.3 kept.
 
 Transaction ids from the recorded run, searchable on a NEAR testnet explorer:

@@ -128,7 +128,7 @@ const screens = {
     return `<h1 class="in">An AI runs your payments. It can't rob you.</h1>
     <p class="lede in">The AI reads invoices and proposes payments. It never holds your money or your main key. The contract decides what actually leaves.</p>
     <section class="slab in story"><h2>A day at a small studio</h2><p>A client pays the studio 10 NEAR. The contract splits it at once: shares go to the collaborators, the rest stays in the treasury. Later a contractor's invoice arrives. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract still refuses, because the owner never approved that exact payment.</p></section>
-    <section class="slab hero in"><div><div class="label">Treasury</div><div class="bal num"><span id="bal">0</span><small>NEAR</small></div>
+    <section class="slab hero in"><div><div class="label">Contract balance</div><div class="bal num"><span id="bal">0</span><small>NEAR</small></div>
       <p class="sub">${fmt(S.revenue)} NEAR received from clients. ${fmt(S.pending)} NEAR on its way out.</p></div>
       <div class="ring" title="Daily limit"><svg viewBox="0 0 168 168"><circle class="t" cx="84" cy="84" r="72"/><circle class="p" id="ringp" cx="84" cy="84" r="72" style="--len:452.4"/></svg><div class="mid"><b class="num">${fmt(S.remainingToday, 2)}</b><span>left today</span></div></div></section>
     <div class="grid2">
@@ -212,9 +212,9 @@ const screens = {
   },
   activity() {
     return `<h1 class="in">Activity</h1>
-    <p class="lede in">Everything the AI tried, and what happened. Each entry is chained to the one before, so a changed entry would break the chain.</p>
+    <p class="lede in">Everything the AI tried, and what happened. Each entry is chained to the one before, so editing an entry that is still in the log breaks the chain. It is not stored on the blockchain, so it is not a complete audit trail.</p>
     <p class="in"><button class="btn ghost sm" id="csv">Download records (CSV)</button></p>
-    <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded this session</span></p>
+    <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded by this app</span></p>
     <section class="slab in" style="margin-top:20px">${S.activity.length ? `<ul class="tl">${S.activity.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">No activity yet.</div>'}</section>`;
   },
   security() {
@@ -233,11 +233,12 @@ const screens = {
     return `<h1 class="in">Security lab</h1>
     <p class="lede in">Try to rob the business. Each run travels along the path of four checks and stops where it is caught.</p>
     <section class="slab in"><div class="sechead" style="margin-bottom:4px"><h2>Attacks</h2><button class="btn ghost sm" id="runall">Run all five</button></div>${A.map(row).join('')}</section>
-    <section class="slab in"><h2 style="margin-bottom:4px">Normal payments</h2>${N.map(row).join('')}</section>
-    <section class="slab in"><h2>What the AI's key can do</h2><p class="sub" style="margin-bottom:10px">The AI holds a restricted key that can call one thing: <b style="color:#fff">pay</b>. These actions were tried with it on testnet and refused by the network itself.</p>
+    <section class="slab in"><h2 style="margin-bottom:4px">Normal payments</h2>
+      <p class="sub" style="margin:6px 0 10px">Which approved invoice should "Pay the approved invoice" and "Fraud" use? ${S.approvals.length ? `<select id="apref" style="margin-left:6px">${S.approvals.map((a) => `<option value="${esc(a.ref)}">${esc(a.ref)}: ${esc(a.amount)} NEAR to ${esc(a.to)}</option>`).join('')}</select>` : '<b>None open. Approve one on the Approvals screen first.</b>'}</p>${N.map(row).join('')}</section>
+    <section class="slab in"><h2>What the AI's key can do</h2><p class="sub" style="margin-bottom:10px">The AI holds a restricted key that can call one thing: <b style="color:#fff">pay</b>. These actions were tried with it on testnet and refused by NEAR with a permission error.</p>
       <table class="keys">${keys.map((k) => `<tr><td>${k}</td><td><span class="tag stopped">Refused</span></td></tr>`).join('')}</table>
-      <p class="sub" style="margin-top:12px">Reproduce with <code>npm run key-limits</code>.</p></section>
-    <div class="honest in"><b>What is real and what is not.</b> Payments, limits, approvals and the split are enforced by a contract on NEAR testnet. The look-alike check is a rule of thumb in the guard, not in the contract. Without an API key the AI is a scripted stand-in that obeys any instruction. Owner approvals are signed in your wallet; other owner changes run from the command line on testnet. The contract has not been audited and handles native NEAR only.</div>`;
+      <p class="sub" style="margin-top:12px">Reproduce with <code>npm run key-limits</code>. It prints the key's real permission from the network, counts only genuine permission errors, and reports network failures as inconclusive.</p></section>
+    <div class="honest in"><b>What is real and what is not.</b> Payments, limits, approvals and the split are enforced by a contract on NEAR testnet. The look-alike check is an early-warning rule of thumb in the guard; the contract is the real boundary. Without an API key the AI is a scripted stand-in that obeys any instruction. Owner approvals are signed in your wallet; other owner changes run from the command line on testnet. The contract has not been audited and handles native NEAR only.</div>`;
   },
 };
 
@@ -339,7 +340,7 @@ function bind(r) {
   }
   if (r === 'security') {
     const lock = (v) => document.querySelectorAll('[data-s],#runall').forEach((x) => (x.disabled = v));
-    const runOne = async (k) => { const out = $('out-' + k); out.textContent = 'Running'; out.className = 'out'; const a = await api('/api/run?s=' + k, { method: 'POST' }); await railPlay(a); out.className = 'out ' + (a.outcome === 'stopped' ? 'bad' : a.outcome === 'paid' ? 'good' : ''); out.textContent = a.headline; };
+    const runOne = async (k) => { const out = $('out-' + k); out.textContent = 'Running'; out.className = 'out'; const a = await api('/api/run?s=' + k + ($('apref') ? '&ref=' + encodeURIComponent($('apref').value) : ''), { method: 'POST' }); await railPlay(a); out.className = 'out ' + (a.outcome === 'stopped' ? 'bad' : a.outcome === 'paid' ? 'good' : ''); out.textContent = a.headline; };
     document.querySelectorAll('[data-s]').forEach((b) => (b.onclick = async () => { if (busy) return; busy = true; lock(true); try { await runOne(b.dataset.s); await refresh(); } catch (e) { $('out-' + b.dataset.s).textContent = 'Something went wrong: ' + e.message; } lock(false); busy = false; }));
     $('runall').onclick = async () => { if (busy) return; busy = true; lock(true); try { for (const k of ['invoice', 'fraud', 'lookalike', 'bypass', 'overlimit']) { await runOne(k); await sleep(700); } await refresh(); } catch (e) { toast(e.message); } lock(false); busy = false; };
   }
@@ -415,7 +416,7 @@ function bindWalletApprove() {
     $('wno').onclick = () => { box.hidden = true; };
     $('wgo').onclick = async () => {
       if (walletBusy) return; walletBusy = true; $('wgo').disabled = true; $('wmsg').className = 'note'; $('wmsg').textContent = 'Waiting for your wallet…';
-      try { const r = await TrustpalWallet.approvePayment({ reference: ref, recipient: to, amountNear: amt, seconds: Math.round(hrs * 3600) }); if (r.hash) lastWalletTx = r.hash; toast('Approved on testnet'); await refresh(); rerender(); }
+      try { const r = await TrustpalWallet.approvePayment({ reference: ref, recipient: to, amountNear: amt, seconds: Math.round(hrs * 3600) }); if (r.hash) lastWalletTx = r.hash; await refresh(); const ok = S.approvals.some((x) => x.ref === ref); toast(ok ? 'Approved on testnet' : 'The wallet returned, but the contract does not show this approval yet. Check the Approvals list in a few seconds.'); rerender(); }
       catch (e) { $('wmsg').className = 'note bad'; $('wmsg').textContent = friendlyWalletError(e.message); }
       walletBusy = false;
     };

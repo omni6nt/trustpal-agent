@@ -39,7 +39,7 @@ TrustpalWallet.init(to).then(r=>{TrustpalWallet.onChange(view);view();if(r.retur
 $('conn').onclick=()=>TrustpalWallet.connect();$('out').onclick=()=>TrustpalWallet.disconnect();
 $('go').onclick=async()=>{const amt=$('amt').value.trim();if(!/^\d+(\.\d{1,6})?$/.test(amt)||Number(amt)<=0){$('msg').className='msg bad';$('msg').textContent='Enter an amount like 1 or 0.5';return}
  $('go').disabled=true;$('msg').className='msg';$('msg').textContent='Waiting for your wallet…';
- try{const r=await TrustpalWallet.payBusiness({memo:$('memo').value,amountNear:amt});$('msg').className='msg ok';$('msg').innerHTML='Payment sent'+(r.hash?'. <a target="_blank" rel="noopener" href="https://testnet.nearblocks.io/txns/'+r.hash+'">See it on the explorer</a>':'.')}
+ try{const r=await TrustpalWallet.payBusiness({memo:$('memo').value,amountNear:amt});$('msg').className='msg ok';$('msg').innerHTML='Payment sent'+(r.signer?' from '+r.signer:'')+(r.hash?'. <a target="_blank" rel="noopener" href="https://testnet.nearblocks.io/txns/'+r.hash+'">See it on the explorer</a>':'.')}
  catch(e){$('msg').className='msg bad';$('msg').textContent='The payment did not go through: '+e.message}
  $('go').disabled=false};
 </script></body></html>

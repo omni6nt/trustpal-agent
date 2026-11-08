@@ -3,7 +3,7 @@
 // Open http://localhost:3000
 import { createServer } from 'node:http';
 import { loadEnvFile } from 'node:process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { MockChain, NearChain, nearToYocto, yoctoToNear, type Chain } from './chain.ts';
 import { guardedPay } from './guard.ts';
@@ -13,7 +13,7 @@ import { KeyPair } from 'near-api-js';
 
 const live = process.argv.includes('--live');
 if (existsSync('.env')) loadEnvFile('.env');
-const LEGIT = process.env.LEGIT_ID ?? 'contractor.testnet';
+let LEGIT = process.env.LEGIT_ID ?? 'contractor.testnet';
 const ATTACKER = 'attacker-wallet.testnet';
 
 let chain: Chain;
@@ -23,6 +23,11 @@ if (live) {
   chain = new NearChain(OWNER_ID, POLICY_ID, AGENT_KEY);
 } else {
   chain = new MockChain(new Set([LEGIT]), nearToYocto('2'), nearToYocto('5'), nearToYocto('20'));
+}
+if (live && !process.env.LEGIT_ID) {
+  // Live mode: default to the first person on the contract's own approved list, not a made-up name.
+  const first = (await chain.recipients())[0];
+  if (first) LEGIT = first;
 }
 if (!live && chain instanceof MockChain) {
   // Offline demo: the "owner" has already approved one invoice and set a revenue split.
@@ -35,7 +40,14 @@ let lastTx: string | undefined;
   const origPay = chain.pay.bind(chain);
   chain.pay = async (...a: Parameters<Chain['pay']>) => { const r = await origPay(...a); if (r.ok && r.txHash && !r.txHash.startsWith('mock-')) lastTx = r.txHash; return r; };
 }
-const ledger = new Ledger();
+// Live mode keeps the activity log on disk so a restart does not lose it. It is tamper-evident for edits to
+// retained entries only: it is not anchored anywhere, so deleting the newest entries would not be detected.
+const ledger = new Ledger(live ? 'data/web-claims.jsonl' : undefined);
+// The last completed payment, remembered on disk (live) so the replay demo survives a restart.
+const LAST_PAID_FILE = 'data/web-last-paid.json';
+let lastPaid: { ref: string; to: string; amount: string } | null = null;
+if (live && existsSync(LAST_PAID_FILE)) { try { lastPaid = JSON.parse(readFileSync(LAST_PAID_FILE, 'utf8')); } catch { /* ignore */ } }
+function rememberPaid(ref: string, to: string, amount: string) { lastPaid = { ref, to, amount }; if (live) { try { writeFileSync(LAST_PAID_FILE, JSON.stringify(lastPaid)); } catch { /* ignore */ } } }
 type Outcome = 'paid' | 'stopped' | 'pending' | 'info';
 interface Activity { guardSkipped?: boolean; id: number; at: string; label: string; outcome: Outcome; stoppedAt: 'guard' | 'rules' | 'contract' | null; headline: string; logs: string[]; to?: string; amount?: string; tx?: string; mode: 'testnet' | 'practice' }
 const activity: Activity[] = [];
@@ -65,10 +77,9 @@ function record(label: string, headline: string, logs: string[], extra: Partial<
   return a;
 }
 let seq = 0;
-let replayAmount = '0';
 const ref = (p: string) => `${p}-${Date.now().toString(36)}-${++seq}`;
 
-async function runScenario(scenario: string) {
+async function runScenario(scenario: string, wantRef = '') {
   const logs: string[] = [];
   const deps = {
     chain, ledger,
@@ -102,24 +113,27 @@ async function runScenario(scenario: string) {
     const r = await guardedPay(fake, nearToYocto('0.05'), ref('look'), deps);
     headline = r.status === 'REFUSED_BY_GUARD' ? 'REFUSED by the guard: look-alike address. No funds moved.' : r.status;
   } else if (scenario === 'replay') {
-    const used = [...ledger.claims].reverse().find((c) => c.status === 'completed' && c.ref.startsWith('INV'));
-    if (!used) {
-      headline = 'Pay the approved invoice first (button 5), then replay it.';
+    if (!lastPaid) {
+      headline = 'Pay an approved invoice first, then replay it.';
     } else {
-      logs.push(`The agent tries to pay ${used.ref} again, same recipient, same amount.`);
-      const p = await chain.pay(used.subject, nearToYocto(replayAmount), used.ref);
+      logs.push(`The agent tries to pay ${lastPaid.ref} again, same recipient, same amount.`);
+      const p = await chain.pay(lastPaid.to, nearToYocto(lastPaid.amount), lastPaid.ref);
       headline = p.ok ? 'PAID (!!) SECURITY FAILURE' : 'REJECTED BY THE CONTRACT: ' + plainErr(p.error);
       logs.push(headline);
     }
   } else if (scenario === 'approved' || scenario === 'fraud') {
     const open = (await chain.listApprovals()).filter((a) => a.expiresMs > Date.now());
-    const a = open[0];
+    // Never guess: if more than one approval is open, the caller must name the one they mean.
+    const a = wantRef ? open.find((x) => x.reference === wantRef) : open.length === 1 ? open[0] : undefined;
     if (!a) {
-      headline = 'No approved invoice is open. The owner approves one first (see README, owner.sh approve).';
+      headline = !open.length
+        ? 'No approved invoice is open. Approve one first on the Approvals screen.'
+        : wantRef ? `Approval ${wantRef} is not open (it may be paid, cancelled or expired).`
+        : 'More than one invoice is approved. Choose which one to run.';
     } else if (scenario === 'approved') {
       logs.push(`Owner approved ${a.reference}: ${yoctoToNear(a.amount)} NEAR to ${a.recipient}. The agent now executes exactly that.`);
-      replayAmount = yoctoToNear(a.amount);
       const r = await guardedPay(a.recipient, a.amount, a.reference, deps);
+      if (r.status === 'PAID') rememberPaid(a.reference, a.recipient, yoctoToNear(a.amount));
       headline = r.status === 'PAID' ? 'PAID: owner-approved invoice, exactly as approved (confirmed by the contract)' : r.status === 'PENDING' ? 'PENDING: accepted, not yet confirmed' : r.status;
     } else {
       logs.push(`Fraud: a fake invoice reuses ${a.reference} but swaps in ${ATTACKER}. The AI was fooled and tries to pay it.`);
@@ -134,8 +148,8 @@ async function runScenario(scenario: string) {
   return { headline, logs };
 }
 
-async function run(scenario: string) {
-  const r = await runScenario(scenario);
+async function run(scenario: string, wantRef = '') {
+  const r = await runScenario(scenario, wantRef);
   return record(LABELS[scenario] ?? scenario, r.headline, r.logs, { guardSkipped: ['bypass', 'overlimit', 'replay', 'fraud'].includes(scenario) });
 }
 
@@ -170,6 +184,17 @@ async function runAgent(doc: string) {
   return { source: ex.source, results, logs };
 }
 
+const PORT = Number(process.env.PORT ?? 3000);
+const HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+const ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
+// GitHub Codespaces opens the page through its own forwarded address (https://<name>-<port>.app.github.dev).
+// Allow exactly that address, and any extra hosts you list in ALLOWED_HOSTS (comma separated, no scheme).
+{
+  const extra = (process.env.ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const cs = process.env.CODESPACE_NAME && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+    ? [`${process.env.CODESPACE_NAME}-${PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`.toLowerCase()] : [];
+  for (const h of [...extra, ...cs]) { HOSTS.add(h); ORIGINS.add(`https://${h}`); }
+}
 const ACCOUNT = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
 const okAccount = (a: unknown): a is string => typeof a === 'string' && a.length >= 2 && a.length <= 64 && ACCOUNT.test(a);
 /** Owner actions. Offline practice mode only: on testnet the owner key never touches this page or this server. */
@@ -253,6 +278,11 @@ async function state() {
 
 createServer(async (req, res) => {
   try {
+    // This server can sign with the agent key, so it only answers requests meant for it:
+    // a Host we expect (blocks DNS rebinding) and, when the browser sends one, our own Origin (blocks other websites).
+    if (!HOSTS.has(String(req.headers.host ?? '').toLowerCase())) { res.writeHead(421, { 'content-type': 'application/json' }); res.end('{"error":"Unexpected Host header"}'); return; }
+    const origin = req.headers.origin;
+    if (origin !== undefined && !ORIGINS.has(String(origin).toLowerCase())) { res.writeHead(403, { 'content-type': 'application/json' }); res.end('{"error":"Cross-site request refused"}'); return; }
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (!url.pathname.startsWith('/api/')) {
       const rel = url.pathname === '/' ? 'index.html' : url.pathname === '/app' ? 'app.html' : normalize(url.pathname).replace(/^([/\\]|\.\.)+/, '');
@@ -273,7 +303,7 @@ createServer(async (req, res) => {
       try { res.end(JSON.stringify(await ownerAction(JSON.parse(body)))); } catch (e: any) { res.writeHead(400); res.end(JSON.stringify({ error: String(e?.message ?? e) })); }
       return;
     }
-    if (url.pathname === '/api/run' && req.method === 'POST') { res.end(JSON.stringify(await run(url.searchParams.get('s') ?? ''))); return; }
+    if (url.pathname === '/api/run' && req.method === 'POST') { res.end(JSON.stringify(await run(url.searchParams.get('s') ?? '', url.searchParams.get('ref') ?? ''))); return; }
     res.writeHead(404); res.end('{}');
   } catch (e: any) { res.writeHead(500); res.end(JSON.stringify({ headline: 'ERROR: ' + (e?.message ?? e), logs: [] })); }
-}).listen(3000, '127.0.0.1', () => console.log(`Trustpal demo: http://localhost:3000  (${live ? 'LIVE testnet' : 'offline mock'})`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Trustpal demo: http://localhost:${PORT}  (${live ? 'LIVE testnet' : 'offline mock'})`));

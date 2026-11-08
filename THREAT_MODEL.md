@@ -17,6 +17,7 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 - The owner and the owner's full-access key.
 - NEAR's enforcement of function-call key permissions.
 - The contract code (unaudited; see limits).
+- Whoever holds the policy account's own full-access key. It was used to deploy the contract and can redeploy it, bypassing every rule. Delete that key after deployment to freeze the code.
 
 ## Attacks and defences
 
@@ -27,17 +28,20 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 | Guard bypassed | Contract still rejects unapproved payments | Contract | Live |
 | Look-alike address | Guard flags near matches; contract rejects unapproved addresses anyway | Guard, contract | Guard live |
 | Replay of a paid invoice | References are single-use | Contract | Live |
-| Stolen agent key | Key can only call `pay`; limits and approvals still apply | NEAR key permissions, contract | Live (6 of 6 refused) |
+| Stolen agent key | Key can only call `pay`; limits and approvals still apply | NEAR key permissions, contract | Live (6 of 6 refused; script re-hardened) |
 | Oversized payment | Per-payment limit | Contract | Offline, unit tests |
 | Drain by many small payments | Daily limit with reservation before transfer | Contract | Unit tests |
 | Instantly paying a brand-new payee | New-payee wait | Contract | Unit tests |
-| Tampering with history | Hash-chained activity log | Application | Offline tests |
+| Editing a logged entry | Hash chain no longer verifies | Application | Offline tests. Not covered: deleting the newest entries, or rewriting the whole log and its hashes. The log is not on-chain. |
+| A website open in the owner's browser calls the local dashboard | Host and Origin checks refuse other sites and DNS rebinding | Dashboard server | Offline tests (`test/web.test.ts`) |
 
 ## Out of scope
 
 - Theft of the owner's full-access key. Next step: hardware wallet or multisig owner.
 - Bugs in the contract that an audit would find. No audit has been done.
 - Mainnet risks, stablecoin risks (not built).
+- Failed or expired payments: a failed transfer releases the daily reservation but keeps its invoice reference used, and an expired approval keeps its reference until cancelled. The owner issues a new reference. This is safe but inconvenient.
+- Failed revenue-share transfers: the contract does not record whether each share arrived (no callback). It relies on NEAR returning an undelivered amount to the contract; this was not tested.
 - Measuring how often a real model is fooled (needs a red-team run).
 
 Full detail and evidence: [DEFENCE_NOTE.md](DEFENCE_NOTE.md).

@@ -1,26 +1,22 @@
 {
   "name": "trustpal-agent",
   "version": "0.1.0",
-  "description": "An AI payments agent for cross-border remittances on NEAR Intents, with hard spending limits and a tamper-evident trust ledger.",
+  "description": "Trustpal: an AI-assisted business treasury on NEAR. The AI proposes payments; the owner approves the exact payment; a smart contract enforces every rule.",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
-    "demo": "node src/demo.ts",
-    "start": "node src/cli.ts",
-    "live": "node src/cli.ts --live",
     "test": "node --test test/*.test.ts",
-    "quote": "node scripts/quote.ts",
     "keygen": "node scripts/keygen.ts",
     "attack": "node src/attack.ts",
     "key-limits": "node scripts/key-limits.ts",
     "web": "node src/web.ts",
-    "build:wallet": "node wallet/build.mjs"
+    "build:wallet": "node wallet/build.mjs",
+    "test:contract": "cargo test --manifest-path contract/Cargo.toml"
   },
   "dependencies": {
-    "@defuse-protocol/one-click-sdk-typescript": "^0.1.13",
     "near-api-js": "^7.4.0"
   },
   "devDependencies": {

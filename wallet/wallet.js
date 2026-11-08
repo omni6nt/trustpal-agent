@@ -46,7 +46,7 @@ async function call(methodName, args, depositYocto = 0n) {
   const hash = out && (out.transaction?.hash || out.transaction_outcome?.id);
   const failure = out && out.status && out.status.Failure;
   if (failure) throw new Error(JSON.stringify(failure).replace(/\\"/g, '"').slice(0, 300));
-  return { hash: hash || null };
+  return { hash: hash || null, signer: (out && out.transaction && out.transaction.signer_id) || null };
 }
 export const approvePayment = ({ reference, recipient, amountNear, seconds }) =>
   call('approve_payment', { reference, recipient, amount: toYocto(amountNear), valid_for_seconds: Number(seconds) });

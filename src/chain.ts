@@ -66,8 +66,9 @@ export interface Chain {
 }
 
 /**
- * Offline stand-in that applies the SAME rules as contract/src/lib.rs, in the same order,
- * with the same messages. It exists so the demo and tests run with no network.
+ * Offline simulation of the contract's MAIN policy rules (approvals, allowlist, limits, cooldown, split, pause).
+ * It does not model NEAR's asynchronous transfer and callback, failed transfers, or the UTC-day reset, and its
+ * messages are close to, not identical to, the contract's. It exists so the demo and tests run with no network.
  * It is NOT the security boundary: the real one is the deployed contract.
  */
 export class MockChain implements Chain {
@@ -237,13 +238,17 @@ export class NearChain implements Chain {
   }
   async pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome> {
     try {
-      const out: any = await this.account.callFunction({
+      // callFunctionRaw returns the full outcome (with the transaction hash); callFunction only returns the decoded value.
+      const out: any = await this.account.callFunctionRaw({
         contractId: this.contractId,
         methodName: 'pay',
         args: { recipient, amount: amount.toString(), reference },
         gas: 50_000_000_000_000n,
         deposit: 0n,
       });
+      // The raw call does not throw when the contract refuses, so look at the final status ourselves.
+      const failure = out?.status?.Failure;
+      if (failure) throw new Error(typeof failure === 'string' ? failure : JSON.stringify(failure));
       const txHash = out?.transaction?.hash ?? undefined;
       // The contract pays in a second step (callback). Only report "settled" once the
       // contract itself says Completed; a Failed transfer is reported as an error.

@@ -9,7 +9,7 @@ import { Ledger } from './trust.ts';
 const live = process.argv.includes('--live');
 if (existsSync('.env')) loadEnvFile('.env');
 
-const LEGIT = process.env.LEGIT_ID ?? 'contractor.testnet';
+let LEGIT = process.env.LEGIT_ID ?? 'contractor.testnet';
 const ATTACKER = 'attacker-wallet.testnet';
 
 let chain: Chain;
@@ -20,6 +20,8 @@ if (live) {
 } else {
   chain = new MockChain(new Set([LEGIT]), nearToYocto('1'), nearToYocto('2'), nearToYocto('10'));
 }
+
+if (live && !process.env.LEGIT_ID) { const first = (await chain.recipients())[0]; if (first) LEGIT = first; }
 
 // An invoice is UNTRUSTED input. This one hides an instruction for the AI.
 const invoice = `
@@ -53,14 +55,16 @@ const deps = {
   log: (m: string) => console.log('   ' + m),
 };
 
-console.log(`Mode: ${live ? 'NEAR TESTNET (real transactions)' : 'OFFLINE MOCK (same rules as the contract)'}\n`);
+console.log(`Mode: ${live ? 'NEAR TESTNET (real transactions)' : 'OFFLINE SIMULATION (main rules only; the contract is the real boundary)'}\n`);
 console.log('The agent reads an untrusted invoice and is manipulated by the hidden note.\n');
 let n = 0;
+const leaked: string[] = [];
 const run = Date.now().toString(36);
 for (const p of gullibleAgent(invoice)) {
   console.log(`STEP ${++n}: agent wants to pay ${p.amount} NEAR to ${p.to}`);
   const r = await guardedPay(p.to, nearToYocto(p.amount), `inv1042-${run}-${n}`, deps);
   console.log(`   RESULT: ${r.status}${'error' in r ? ' - ' + r.error : ''}\n`);
+  if (p.to === ATTACKER && (r.status === 'PAID' || r.status === 'PENDING')) leaked.push(`guarded payment to ${ATTACKER}`);
 }
 
 console.log('STEP 3: suppose the guard is bypassed entirely and the agent calls the chain directly:');
@@ -75,4 +79,4 @@ console.log(`   (limit is ${yoctoToNear(p.maxPerPayment)} NEAR, asked ${yoctoToN
 console.log(`   RESULT: ${over.ok ? 'PAID (!!)' : 'REJECTED BY CONTRACT - ' + over.error}\n`);
 
 console.log(`Audit ledger intact: ${ledger.verify().ok} (${ledger.claims.length} entries)`);
-if (direct.ok || over.ok) { console.error('SECURITY FAILURE: a forbidden payment went through.'); process.exit(1); }
+if (direct.ok || over.ok || leaked.length) { console.error('SECURITY FAILURE: a forbidden payment went through.'); process.exit(1); }
