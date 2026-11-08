@@ -42,7 +42,7 @@ test('the right token sets a cookie, and the cookie unlocks the API', async () =
   assert.equal(r.status, 302);
   const cookie = String(r.headers['set-cookie']?.[0] ?? '').split(';')[0];
   assert.match(cookie, /^tp_session=/);
-  assert.match(String(r.headers['set-cookie']?.[0]), /HttpOnly; SameSite=Strict/);
+  assert.match(String(r.headers['set-cookie']?.[0]), /HttpOnly; SameSite=Lax/);
   assert.equal((await call('/api/state', cookie)).status, 200);
   assert.equal((await call('/app', cookie)).status, 200);
 });

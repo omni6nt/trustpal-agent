@@ -306,7 +306,7 @@ createServer(async (req, res) => {
       const t = url.searchParams.get('t');
       if (t && safeEq(t, TOKEN) && !url.pathname.startsWith('/api/')) {
         const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
-        res.writeHead(302, { 'set-cookie': `tp_session=${TOKEN}; HttpOnly; SameSite=Strict; Path=/${secure}`, location: url.pathname, 'cache-control': 'no-store' }); res.end(); return;
+        res.writeHead(302, { 'set-cookie': `tp_session=${TOKEN}; HttpOnly; SameSite=Lax; Path=/${secure}`, location: url.pathname, 'cache-control': 'no-store' }); res.end(); return;
       }
       const isApi = url.pathname.startsWith('/api/');
       if ((isApi || LOCKED_PAGES.has(url.pathname)) && !cookieOk(req.headers.cookie)) {
@@ -339,5 +339,9 @@ createServer(async (req, res) => {
   } catch (e: any) { res.writeHead(500); res.end(JSON.stringify({ headline: 'ERROR: ' + (e?.message ?? e), logs: [] })); }
 }).listen(PORT, '127.0.0.1', () => {
   console.log(`Trustpal demo: http://localhost:${PORT}  (${live ? 'LIVE testnet' : 'offline mock'})`);
-  if (LOCK) console.log(`Open this link to sign in (it sets a private session cookie): http://localhost:${PORT}/?t=${TOKEN}`);
+  if (LOCK) {
+    const cn = process.env.CODESPACE_NAME, dom = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+    const link = cn && dom ? `https://${cn}-${PORT}.${dom}/?t=${TOKEN}` : `http://localhost:${PORT}/?t=${TOKEN}`;
+    console.log(`Open THIS link to sign in (it sets a private session cookie; a new one is printed every time you start the server):\n${link}`);
+  }
 });
