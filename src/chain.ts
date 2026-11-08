@@ -237,6 +237,11 @@ export class NearChain implements Chain {
     return v === null ? null : Number(BigInt(v) / 1_000_000n); // ns -> ms
   }
   async pay(recipient: string, amount: bigint, reference: string): Promise<PayOutcome> {
+    // If the reference is already on record, nothing this call does can be "its" payment. Say so and send nothing.
+    // (Without this, a replayed reference would look like a success when we later read the old payment back.)
+    const before = await this.view<any>('get_payment', { reference }).catch(() => null);
+    if (before?.status) return { ok: false, error: 'BLOCKED: this payment reference was already used' };
+    let contractRefused = false;
     try {
       // callFunctionRaw returns the full outcome (with the transaction hash); callFunction only returns the decoded value.
       const out: any = await this.account.callFunctionRaw({
@@ -248,7 +253,7 @@ export class NearChain implements Chain {
       });
       // The raw call does not throw when the contract refuses, so look at the final status ourselves.
       const failure = out?.status?.Failure;
-      if (failure) throw new Error(typeof failure === 'string' ? failure : JSON.stringify(failure));
+      if (failure) { contractRefused = true; throw new Error(typeof failure === 'string' ? failure : JSON.stringify(failure)); }
       const txHash = out?.transaction?.hash ?? undefined;
       // The contract pays in a second step (callback). Only report "settled" once the
       // contract itself says Completed; a Failed transfer is reported as an error.
@@ -264,6 +269,8 @@ export class NearChain implements Chain {
       const message = String(e?.message ?? e).slice(0, 300);
       // The transaction may have reached the contract even though this call threw (a timeout, say).
       // Ask the contract what it recorded before calling this a rejection.
+      // A refusal by the contract is final. Only a network-level error (no answer) is checked against the record.
+      if (contractRefused) return { ok: false, error: message };
       const rec = await this.view<any>('get_payment', { reference }).catch(() => null);
       if (rec?.status === 'Completed') return { ok: true, settled: true };
       if (rec?.status === 'Pending') return { ok: true, settled: false };
