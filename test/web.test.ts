@@ -56,3 +56,10 @@ test('a listed forwarded host (Codespaces) is allowed, an unlisted one is not', 
   assert.equal((await call('/api/state', { host: 'demo-3917.app.github.dev', origin: 'https://evil.example' })).status, 403);
   assert.equal((await call('/api/state', { host: 'other-3917.app.github.dev' })).status, 421);
 });
+
+test('the pages send headers that stop other sites from framing the dashboard', async () => {
+  const r = await new Promise<any>((resolve, reject) => { const q = request({ host: '127.0.0.1', port: PORT, path: '/app', headers: { host: `127.0.0.1:${PORT}` } }, resolve); q.on('error', reject); q.end(); });
+  assert.equal(r.headers['x-frame-options'], 'DENY');
+  assert.match(String(r.headers['content-security-policy']), /frame-ancestors 'none'/);
+  r.resume();
+});

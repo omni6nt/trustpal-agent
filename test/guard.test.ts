@@ -174,3 +174,11 @@ test('look-alike of an approved address is BLOCKed with a clear reason; the real
   assert.ok(fake2.reasons.some((r) => r.includes('not a valid')) || fake2.verdict === 'BLOCK');
   assert.ok(!(await checkCounterparty('good.testnet', deps)).reasons.some((r) => r.includes('look-alike')));
 });
+
+test('a blocklisted address is still refused when the owner approved it', async () => {
+  const { chain, deps } = mk();
+  chain.approvePayment('INV-B', 'bad.testnet', nearToYocto('0.1'), 3600);
+  const r = await guardedPay('bad.testnet', nearToYocto('0.1'), 'INV-B', deps);
+  assert.equal(r.status, 'REFUSED_BY_GUARD');
+  assert.ok(r.check.reasons[0].includes('Blocklisted'));
+});

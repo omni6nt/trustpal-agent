@@ -4,6 +4,7 @@
 import { createServer } from 'node:http';
 import { loadEnvFile } from 'node:process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { extname, join, normalize } from 'node:path';
 import { MockChain, NearChain, nearToYocto, yoctoToNear, type Chain } from './chain.ts';
 import { guardedPay } from './guard.ts';
@@ -166,19 +167,25 @@ async function runAgent(doc: string) {
   const deps = {
     chain, ledger,
     blocklist: [{ address: ATTACKER, evidence: 'address came from an invoice with a hidden instruction to the AI (demo)' }],
-    askHuman: async () => { logs.push('Human confirmation requested -> approved (demo auto-approve)'); return true; },
+    // Live mode never answers a warning on the owner's behalf: it stops and tells the owner to approve the exact payment.
+    askHuman: async () => {
+      if (live) { logs.push('This needs the owner to confirm, so nothing was paid. Approve the exact payment first.'); return false; }
+      logs.push('Human confirmation requested -> approved (demo auto-approve)'); return true;
+    },
     log: (m: string) => logs.push('   ' + m.trim()),
   };
-  const results: { to: string; amount: string; status: string; detail: string }[] = [];
+  const results: { id?: number; to: string; amount: string; status: string; detail: string }[] = [];
   for (const p of ex.payments) {
     logs.push(`> ${p.amountNear} NEAR to ${p.to}`);
     try {
       const r = await guardedPay(p.to, nearToYocto(p.amountNear), ref('inv'), deps);
-      results.push({ to: p.to, amount: p.amountNear, status: r.status, detail: 'error' in r ? r.error : r.check.reasons[0] ?? '' });
-      const head = r.status === 'PAID' ? 'PAID: confirmed by the contract' : r.status === 'PENDING' ? 'PENDING: accepted, not yet confirmed' : r.status === 'REFUSED_BY_GUARD' ? 'REFUSED by the guard. No funds moved.' : r.status === 'REJECTED_BY_CONTRACT' ? 'REJECTED BY THE CONTRACT: ' + plainErr('error' in r ? r.error : '') : r.status;
-      record('Invoice read by the AI', head, [`The AI proposed ${p.amountNear} NEAR to ${p.to}`, ...(('check' in r && r.check.reasons) ? r.check.reasons : [])], { to: p.to, amount: p.amountNear });
+      const head = r.status === 'DECLINED_BY_HUMAN' ? 'DECLINED: needs the owner to confirm. Nothing was paid.' : r.status === 'PAID' ? 'PAID: confirmed by the contract' : r.status === 'PENDING' ? 'PENDING: accepted, not yet confirmed' : r.status === 'REFUSED_BY_GUARD' ? 'REFUSED by the guard. No funds moved.' : r.status === 'REJECTED_BY_CONTRACT' ? 'REJECTED BY THE CONTRACT: ' + plainErr('error' in r ? r.error : '') : r.status;
+      const act = record('Invoice read by the AI', head, [`The AI proposed ${p.amountNear} NEAR to ${p.to}`, ...(('check' in r && r.check.reasons) ? r.check.reasons : [])], { to: p.to, amount: p.amountNear });
+      results.push({ id: act.id, to: p.to, amount: p.amountNear, status: r.status, detail: 'error' in r ? r.error : r.check.reasons[0] ?? '' });
     } catch (e: any) {
-      results.push({ to: p.to, amount: p.amountNear, status: 'ERROR', detail: String(e?.message ?? e) });
+      const msg = String(e?.message ?? e);
+      const act = record('Invoice read by the AI', 'ERROR: ' + msg, [`The AI proposed ${p.amountNear} NEAR to ${p.to}`, msg], { to: p.to, amount: p.amountNear });
+      results.push({ id: act.id, to: p.to, amount: p.amountNear, status: 'ERROR', detail: msg });
     }
   }
   return { source: ex.source, results, logs };
@@ -195,6 +202,13 @@ const ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]
     ? [`${process.env.CODESPACE_NAME}-${PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`.toLowerCase()] : [];
   for (const h of [...extra, ...cs]) { HOSTS.add(h); ORIGINS.add(`https://${h}`); }
 }
+// Sign-in for the local dashboard. In live mode (or when DASHBOARD_TOKEN is set) the pages that act and the whole API
+// need a secret that only the person at this terminal has: open the link printed at start-up, which sets a session cookie.
+const LOCK = live || !!process.env.DASHBOARD_TOKEN;
+const TOKEN = process.env.DASHBOARD_TOKEN || randomBytes(16).toString('hex');
+const safeEq = (a: string, b: string) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); };
+const cookieOk = (h?: string) => { const m = /(?:^|;\s*)tp_session=([A-Za-z0-9_-]+)/.exec(h ?? ''); return !!m && safeEq(m[1], TOKEN); };
+const LOCKED_PAGES = new Set(['/app', '/app.html', '/app.js', '/app.css']);
 const ACCOUNT = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
 const okAccount = (a: unknown): a is string => typeof a === 'string' && a.length >= 2 && a.length <= 64 && ACCOUNT.test(a);
 /** Owner actions. Offline practice mode only: on testnet the owner key never touches this page or this server. */
@@ -253,7 +267,7 @@ async function state() {
     maxPerPayment: yoctoToNear(p.maxPerPayment), dailyCap: yoctoToNear(p.dailyCap),
     remainingToday: yoctoToNear(p.remainingToday), paused: p.paused,
     revenue: yoctoToNear(p.revenueTotal),
-    approvals: (await chain.listApprovals()).map((a) => ({ ref: a.reference, to: a.recipient, amount: yoctoToNear(a.amount), minutesLeft: Math.max(0, Math.round((a.expiresMs - Date.now()) / 60000)) })),
+    approvals: (await chain.listApprovals()).map((a) => ({ ref: a.reference, to: a.recipient, amount: yoctoToNear(a.amount), minutesLeft: Math.max(0, Math.round((a.expiresMs - Date.now()) / 60000)), expired: a.expiresMs <= Date.now() })),
     split: (await chain.split()).map((x) => ({ who: x.account, pct: x.bps / 100 })),
     treasuryPct: 100 - (await chain.split()).reduce((s, x) => s + x.bps, 0) / 100,
     cooldown: p.cooldownSeconds, pending: yoctoToNear(p.pendingTotal),
@@ -283,7 +297,24 @@ createServer(async (req, res) => {
     if (!HOSTS.has(String(req.headers.host ?? '').toLowerCase())) { res.writeHead(421, { 'content-type': 'application/json' }); res.end('{"error":"Unexpected Host header"}'); return; }
     const origin = req.headers.origin;
     if (origin !== undefined && !ORIGINS.has(String(origin).toLowerCase())) { res.writeHead(403, { 'content-type': 'application/json' }); res.end('{"error":"Cross-site request refused"}'); return; }
+    res.setHeader('x-frame-options', 'DENY');
+    res.setHeader('content-security-policy', "frame-ancestors 'none'");
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.setHeader('referrer-policy', 'no-referrer');
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (LOCK) {
+      const t = url.searchParams.get('t');
+      if (t && safeEq(t, TOKEN) && !url.pathname.startsWith('/api/')) {
+        const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+        res.writeHead(302, { 'set-cookie': `tp_session=${TOKEN}; HttpOnly; SameSite=Strict; Path=/${secure}`, location: url.pathname, 'cache-control': 'no-store' }); res.end(); return;
+      }
+      const isApi = url.pathname.startsWith('/api/');
+      if ((isApi || LOCKED_PAGES.has(url.pathname)) && !cookieOk(req.headers.cookie)) {
+        if (isApi) { res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":"Locked. Open the link printed in the terminal where you started the dashboard."}'); return; }
+        res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
+        res.end('<!doctype html><meta charset="utf-8"><title>Trustpal is locked</title><body style="font:20px system-ui;background:#0A1013;color:#EAF1EF;padding:60px"><h1>Trustpal is locked</h1><p>Open the link printed in the terminal where you started the dashboard. It ends with <code>/?t=</code> and a code. This keeps other people and other websites from using your payment agent.</p></body>'); return;
+      }
+    }
     if (!url.pathname.startsWith('/api/')) {
       const rel = url.pathname === '/' ? 'index.html' : url.pathname === '/app' ? 'app.html' : normalize(url.pathname).replace(/^([/\\]|\.\.)+/, '');
       const file = join('public', rel);
@@ -306,4 +337,7 @@ createServer(async (req, res) => {
     if (url.pathname === '/api/run' && req.method === 'POST') { res.end(JSON.stringify(await run(url.searchParams.get('s') ?? '', url.searchParams.get('ref') ?? ''))); return; }
     res.writeHead(404); res.end('{}');
   } catch (e: any) { res.writeHead(500); res.end(JSON.stringify({ headline: 'ERROR: ' + (e?.message ?? e), logs: [] })); }
-}).listen(PORT, '127.0.0.1', () => console.log(`Trustpal demo: http://localhost:${PORT}  (${live ? 'LIVE testnet' : 'offline mock'})`));
+}).listen(PORT, '127.0.0.1', () => {
+  console.log(`Trustpal demo: http://localhost:${PORT}  (${live ? 'LIVE testnet' : 'offline mock'})`);
+  if (LOCK) console.log(`Open this link to sign in (it sets a private session cookie): http://localhost:${PORT}/?t=${TOKEN}`);
+});

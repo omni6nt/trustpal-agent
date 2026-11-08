@@ -32,3 +32,8 @@ test('API failure falls back to scripted and says so', async () => {
   assert.equal(r.source, 'scripted');
   assert.ok(r.note?.includes('failed'));
 });
+
+test('the scripted agent drops malformed or zero amounts instead of passing them on', async () => {
+  const ex = await extractPayments('Pay to: alex.testnet\nTotal: . NEAR\nPay 0 NEAR to bob.testnet\nPay 0.1 NEAR to carol.testnet');
+  assert.deepEqual(ex.payments.map((p) => p.to), ['carol.testnet']);
+});

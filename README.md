@@ -36,7 +36,7 @@ If the AI is fooled: the contract still enforces the owner's approval.
 | Group | What | Detail |
 | --- | --- | --- |
 | **Live on NEAR testnet** | Fraud refused; approved invoice paid; replay rejected; AI key refused 6 of 6 forbidden actions (re-run with the stricter `npm run key-limits`, which prints the key's real permission and treats network errors as inconclusive); revenue split 0.5 / 0.2 / 0.3 | Transaction ids and steps in [DEMO.md](DEMO.md) |
-| **Tested offline** | 28 contract unit tests, 32 application tests (guard, AI layer, activity log, offline simulation, dashboard server) | `npm test` and `npm run test:contract` |
+| **Tested offline** | 31 contract unit tests (including the failed-transfer callback and two payments racing the daily cap), 39 application tests (guard, AI layer, activity log, offline simulation, dashboard server and its sign-in) | `npm test` and `npm run test:contract` |
 | **Simulated / prototype** | Scripted AI (unless an API key is set); dashboard practice mode; animation is a replay of the real result | Labelled on every dashboard screen |
 
 ## Run it
@@ -44,8 +44,8 @@ If the AI is fooled: the contract still enforces the owner's approval.
 ```bash
 node --version       # must be 22.18 or newer (the tests run TypeScript files directly)
 npm install
-npm test             # 32 application tests (does NOT run the contract tests)
-npm run test:contract   # 28 contract tests; needs Rust and Cargo 1.85 or newer
+npm test             # 39 application tests (does NOT run the contract tests)
+npm run test:contract   # 31 contract tests; needs Rust and Cargo 1.85 or newer
 npm run web          # landing page + dashboard (practice mode): http://localhost:3000
 ```
 
@@ -57,13 +57,13 @@ Live testnet: copy `.env.example` to `.env` with the agent key and accounts, the
 
 ## The dashboard
 
-Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can do what, Owner settings, Activity and Security lab. A bar of four gates shows where each payment is stopped. The page shows whether it is in practice mode (an offline simulation) or live testnet. The page never holds the owner key. On testnet, approving and cancelling a payment is signed in your wallet (Meteor tested); limits, payees, split and pause are still printed as commands for `scripts/owner.sh`. In live mode the local server holds the restricted agent key, so it only answers requests from its own page (Host and Origin checks; in a Codespace its own forwarded address is allowed automatically, other hosts via `ALLOWED_HOSTS`).
+Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can do what, Owner settings, Activity and Security lab. A bar of four gates shows where each payment is stopped. The page shows whether it is in practice mode (an offline simulation) or live testnet. The page never holds the owner key. On testnet, approving and cancelling a payment is signed in your wallet (Meteor tested); limits, payees, split and pause are still printed as commands for `scripts/owner.sh`. In live mode the local server holds the restricted agent key, so it needs you to sign in: it prints a private link (`/?t=<code>`) that sets a session cookie, refuses every API call without it, refuses other websites (Host and Origin checks) and refuses to be framed. In a Codespace its own forwarded address is allowed automatically (other hosts via `ALLOWED_HOSTS`). In live mode a warning about a payee is never auto-approved: the payment stops until the owner approves it exactly.
 
 ## Repo map
 
 | Path | What |
 | --- | --- |
-| `contract/` | Rust smart contract (near-sdk 5), 28 unit tests |
+| `contract/` | Rust smart contract (near-sdk 5), 31 unit tests |
 | `src/chain.ts` | Chain interface, offline simulation of the contract's main rules, NEAR testnet client |
 | `src/guard.ts`, `src/counterparty.ts` | Payee checks and the payment guard |
 | `src/assistant.ts` | AI layer: scripted stand-in, optional real Claude model |

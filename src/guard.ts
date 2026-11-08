@@ -37,7 +37,10 @@ export async function guardedPay(
     } else if (Date.now() > appr.expiresMs) {
       check = { verdict: 'BLOCK', reasons: [`The owner's approval for "${reference}" has expired`] };
     } else {
-      check = { verdict: 'ALLOW', reasons: ['The owner approved this exact payment (recipient, amount, reference)'] };
+      const bad = deps.blocklist.find((b) => b.address === recipient);
+      check = bad
+        ? { verdict: 'BLOCK', reasons: [`Blocklisted address (${bad.evidence}). The owner approved this payment, so remove the address from the blocklist first if it is a mistake`] }
+        : { verdict: 'ALLOW', reasons: ['The owner approved this exact payment (recipient, amount, reference)'] };
     }
   } else {
     check = await checkCounterparty(recipient, deps);

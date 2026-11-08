@@ -8,7 +8,7 @@ Trustpal is a small business whose payments an AI can run but cannot rob: the AI
 2. Security lab: **Run all five** attacks and watch each stop at its gate.
 3. Run **Pay the approved invoice**, then **Replay a paid invoice**.
 4. Owner settings: change the split or the limits and run an attack again.
-5. For the live testnet evidence, follow [DEMO.md](DEMO.md): fraud refused, approved invoice paid, replay rejected, `npm run key-limits` refused 6 of 6.
+5. The live testnet evidence (fraud refused, approved invoice paid, replay rejected, `npm run key-limits` refused 6 of 6) is recorded in the evidence section below with transaction ids. A judge cannot re-run it without our keys; the practice-mode path in [DEMO.md](DEMO.md) needs only Node.
 
 ## The problem
 
@@ -43,7 +43,7 @@ The gates are not equal. The guard is useful but advisory: it lives in the appli
 
 | Part | What it is | Why it matters |
 | --- | --- | --- |
-| Policy contract | A Rust smart contract (near-sdk 5) that holds the treasury and enforces every rule. 28 unit tests. | The final authority for the treasury it holds: money held by the contract cannot leave without the contract agreeing. |
+| Policy contract | A Rust smart contract (near-sdk 5) that holds the treasury and enforces every rule. 31 unit tests. | The final authority for the treasury it holds: money held by the contract cannot leave without the contract agreeing. |
 | Agent key | A NEAR function-call access key that can call one method, `pay`, on the policy contract. It has a small gas allowance. | If the AI or its host is compromised, the thief gets a key that can only ask for payments the owner already approved. |
 | Guard | TypeScript checks run before the AI's request is sent: valid account name, blocklist, look-alike detection, account exists, first-time-payee warning. | Catches bad payees early and explains why in plain words. Advisory, not the last line. |
 | Activity log | A hash-chained record of every claim and outcome. Each entry includes the hash of the one before. | Editing an entry that is still in the log breaks the chain and is detected. Deleting the newest entries, or rewriting the log and its hashes together, would not be: the log is not anchored on-chain. In live mode it is saved to a local file. |
@@ -52,7 +52,7 @@ The gates are not equal. The guard is useful but advisory: it lives in the appli
 | Owner scripts | `scripts/owner.sh` for approvals, split, limits, payees, pause and client payments; `setup-testnet.sh` for deployment; `key-limits.ts` and `attack.ts` for proof. | The owner's key stays in the owner's own terminal. |
 | Offline simulation | An in-memory model of the contract's main rules used for tests and practice mode. It does not model NEAR's asynchronous transfers, failed transfers or the daily reset. | Lets people try everything with no wallet and no network. |
 
-**Who holds which key.** The owner holds a full-access key and uses it only for owner actions: approvals, limits, payees, split, pause, withdraw. The AI's host holds only the restricted agent key. The agent key belongs to the owner's NEAR account, but NEAR itself restricts that key to calling `pay` on the policy contract. So the contract sees an authorised call from the owner account, yet the key cannot perform any other owner action such as approving a payment or changing the split. **The owner's full-access key is the residual risk:** if it is stolen, every rule can be changed. A hardware wallet or a multisig owner is the intended next step.
+**Who holds which key.** The owner holds a full-access key and uses it only for owner actions: approvals, limits, payees, split, pause, withdraw. The AI's host holds only the restricted agent key. The agent key belongs to the owner's NEAR account, but NEAR itself restricts that key to calling `pay` on the policy contract. So the contract sees an authorised call from the owner account, yet the key cannot perform any other owner action such as approving a payment or changing the split. **There are two residual risks.** (1) The owner's full-access key: if it is stolen, every rule can be changed. A hardware wallet or a multisig owner is the intended next step. (2) The policy account's own full-access key, created at deployment: whoever holds it can redeploy the contract and bypass every rule. It should be deleted once the contract is final (`scripts/freeze-contract.sh` explains how), after which the code can no longer change.
 
 ## The owner's rules
 
@@ -70,7 +70,7 @@ These are the values only the owner sets. The contract enforces them and the AI 
 | Withdraw | The owner can take money out | Cannot touch money already reserved for pending payments |
 | One-time references | Every invoice reference can be paid once | Stops replay |
 
-The split happens automatically on every incoming client payment, and the AI cannot change the percentages. On the testnet deployment the split is 50% to the contractor, 20% to the owner, and 30% kept in the treasury. In the dashboard's practice mode the owner can change every value above and see the effect. On testnet the dashboard never holds the owner key: it prints the exact command to run instead, and says so on every screen.
+The split happens automatically on every incoming client payment, and the AI cannot change the percentages. On the testnet deployment the split is 50% to the contractor, 20% to the owner, and 30% kept in the treasury. In the dashboard's practice mode the owner can change every value above and see the effect. On testnet the dashboard never holds the owner key: approvals and cancellations are signed in the owner's wallet, and the other owner changes (limits, payees, split, pause) are printed as commands to run.
 
 ## Evidence
 
@@ -97,9 +97,9 @@ Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testne
 
 **2. Tested offline**
 
-- 28 contract unit tests covering limits, approvals, cooldown, split rounding, pause and withdraw protection.
-- 32 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's Host/Origin checks. `npm test` does not run the contract tests; `npm run test:contract` does.
-- The dashboard and the owner settings, checked in a browser at desktop, laptop and phone widths.
+- 31 contract unit tests covering limits, approvals, cooldown, split rounding, pause, withdraw protection, the failed-transfer callback (reservation released, reference stays used) and two payments racing the daily cap.
+- 39 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's sign-in, Host/Origin checks and framing headers. `npm test` does not run the contract tests; `npm run test:contract` does.
+- Checked by hand, not by automated tests: the dashboard and the owner settings in a browser at desktop, laptop and phone widths.
 
 **3. Simulated or prototype**
 
@@ -124,7 +124,7 @@ Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testne
 
 **Worst case if a defence fails**
 
-- The AI is fooled and the guard misses it: nothing moves unless the owner approved that exact payment or the payee is on the list. The most that can leave is a payment to a listed payee within the limits.
+- The AI is fooled and the guard misses it: nothing moves unless the owner approved that exact payment or the payee is on the list. The most that can leave is a payment to a listed payee within the limits, plus any exact payment the owner approved (an approved payment is not capped by the per-payment limit but still counts toward the daily cap).
 - The agent key is stolen: the same bound applies, capped by the daily limit. The owner can pause payments and replace the key.
 - The owner approves the wrong address by mistake: that exact payment can go out once. The owner can cancel the approval before it is used.
 - The owner key is stolen: everything. This is out of scope. Protect it as you would a bank's master login.
@@ -178,14 +178,14 @@ A scan of other entries, gathered by the team and not independently verified, sh
 | Does the dashboard control real funds? | No owner key is ever on the page. In practice mode it runs on a simulation. In live mode it reads the testnet contract, sends payments with the restricted agent key (which can only call `pay`), and owner changes are signed in a wallet or run in the owner's terminal. |
 | Does it use NEAR Intents? | No. An earlier cross-border remittance prototype that used it was removed from this repo. |
 | Did AI write the code? | Yes, with Claude's help. The team deployed it, ran every live test and checked the results. |
-| What would you build next? | Wallet-signed approvals and login, stablecoin payments, a multisig owner, an outside audit, and a red-team run with a real model to measure how often it is fooled. |
+| What would you build next? | Wallet-signed versions of the remaining owner actions (limits, payees, split, pause), email login, stablecoin payments, a multisig owner, an outside audit, and a red-team run with a real model to measure how often it is fooled. |
 
 ## How to check every claim yourself
 
 ```bash
 npm install
-npm test            # 32 application tests (Node 22.18+)
-npm run test:contract   # 28 contract tests (Rust/Cargo 1.85+)
+npm test            # 39 application tests (Node 22.18+)
+npm run test:contract   # 31 contract tests (Rust/Cargo 1.85+)
 npm run attack      # the attack suite against the offline chain
 npm run web         # dashboard in practice mode at http://localhost:3000
 ```

@@ -7,7 +7,7 @@ export interface ClaimInput {
   subject: string; // the counterparty the claim is about
   amountUsd: number;
   status: ClaimStatus;
-  ref: string; // swap / deposit reference
+  ref: string; // invoice or payment reference
   at?: string; // ISO timestamp, defaults to now
 }
 

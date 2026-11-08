@@ -261,7 +261,14 @@ export class NearChain implements Chain {
       }
       return { ok: true, txHash, settled: false };
     } catch (e: any) {
-      return { ok: false, error: String(e?.message ?? e).slice(0, 300) };
+      const message = String(e?.message ?? e).slice(0, 300);
+      // The transaction may have reached the contract even though this call threw (a timeout, say).
+      // Ask the contract what it recorded before calling this a rejection.
+      const rec = await this.view<any>('get_payment', { reference }).catch(() => null);
+      if (rec?.status === 'Completed') return { ok: true, settled: true };
+      if (rec?.status === 'Pending') return { ok: true, settled: false };
+      if (rec?.status === 'Failed') return { ok: false, error: 'Transfer failed after the contract accepted it; the reservation was released' };
+      return { ok: false, error: message };
     }
   }
 }

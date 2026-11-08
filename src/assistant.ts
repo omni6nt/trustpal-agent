@@ -63,13 +63,22 @@ export async function claudeAgent(doc: string, apiKey: string, fetchFn: typeof f
   return sanitise(json.payments);
 }
 
+/** Same filter for the scripted agent: drop anything whose amount is not a positive NEAR amount. */
+export function keepValid(items: Proposed[]): Proposed[] {
+  const out: Proposed[] = [];
+  for (const it of items.slice(0, 10)) {
+    try { if (nearToYocto(it.amountNear) > 0n) out.push(it); } catch { /* skip malformed amount */ }
+  }
+  return out;
+}
+
 export async function extractPayments(doc: string, apiKey?: string, fetchFn: typeof fetch = fetch): Promise<Extraction> {
   if (apiKey) {
     try {
       return { source: 'claude', payments: await claudeAgent(doc, apiKey, fetchFn) };
     } catch (e: any) {
-      return { source: 'scripted', payments: scriptedAgent(doc), note: `Claude call failed (${String(e?.message ?? e).slice(0, 80)}); used the scripted agent instead` };
+      return { source: 'scripted', payments: keepValid(scriptedAgent(doc)), note: `Claude call failed (${String(e?.message ?? e).slice(0, 80)}); used the scripted agent instead` };
     }
   }
-  return { source: 'scripted', payments: scriptedAgent(doc) };
+  return { source: 'scripted', payments: keepValid(scriptedAgent(doc)) };
 }

@@ -6,7 +6,7 @@ Two ways to see Trustpal. Start with A: it needs nothing but Node 22.18 or newer
 
 ```bash
 npm install
-npm test            # 32 tests should pass
+npm test            # 39 tests should pass
 npm run attack      # the attack suite against the offline chain
 npm run web         # open http://localhost:3000
 ```
@@ -22,7 +22,7 @@ Practice mode is a simulation of the contract's rules on your computer. It is la
 
 ## B. The live testnet path
 
-This is what was run on NEAR testnet. A judge cannot run it against our deployment (the agent key is private), but every result can be checked, and the whole deployment can be rebuilt with `scripts/setup-testnet.sh`.
+This is what was run on NEAR testnet. A judge cannot run it against our deployment (the agent key and the owner's wallet are private), so the results are recorded in `DEFENCE_NOTE.md` with transaction ids you can look up on a NEAR testnet explorer. To rebuild the whole deployment yourself you need Linux or a Codespace, near-cli-rs, cargo-near, a funded testnet owner account and a policy account name that does not exist yet, then run `scripts/setup-testnet.sh`. In live mode the dashboard asks you to open the private link it prints in the terminal.
 
 Deployment: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testnet`, contractor `omni6nt-alex.testnet`.
 
@@ -54,7 +54,7 @@ near contract call-function as-read-only omni6nt-policy3.testnet get_policy json
 
 ## What the demo does not show
 
-Mainnet, stablecoins, wallet-signed approvals and login. See the honest limits in `DEFENCE_NOTE.md`.
+Mainnet, stablecoins and email login. (Wallet-signed approvals are shown below, in live mode only.) See the honest limits in `DEFENCE_NOTE.md`.
 
 ## Approve from the dashboard with a wallet (testnet)
 
@@ -63,7 +63,7 @@ The dashboard can send the owner's approval itself. The page never sees a privat
 1. Open the dashboard, go to **Approvals**, press **Connect wallet**, and pick Meteor or MyNearWallet (switch the wallet to **testnet** first).
 2. A wallet that is not the owner account connects as **View only**. It can look around, and the contract would refuse its approvals.
 3. The owner account (`omni6nt-owner.testnet`) connects as **Owner**. Fill in the invoice, payee and amount, press **Review and approve**, check every line, then **Confirm in my wallet**.
-4. This is a real testnet transaction even when the dashboard is in practice mode. The link under the form opens it on the NEAR testnet explorer.
+4. Wallet approval works only when the dashboard is in **live** mode (`npm run web -- --live`, which needs the team's agent key and `.env`). In practice mode the page uses the simulated approval instead and says so. In live mode the link under the form opens the transaction on the NEAR testnet explorer.
 5. Rebuild the wallet code after changing `wallet/wallet.js` with `npm run build:wallet`.
 
 Tested live: the owner wallet approved INV-3001 (tx `8A3GvjATXMAp9p4k4XbALSScGtrGTWJA6mPS3YYASFHL`), and `get_approval` on the contract returned the exact recipient, amount and expiry.

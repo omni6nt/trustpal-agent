@@ -149,7 +149,7 @@ const screens = {
       <div id="invres" style="margin-top:14px"></div></section>`;
   },
   approvals() {
-    const list = S.approvals.length ? S.approvals.map((a) => `<div class="appr"><div><h3>${esc(a.ref)}</h3><p class="sub" style="word-break:break-all">to ${esc(a.to)}</p><p class="sub">${a.minutesLeft} min left. One use, exact amount.</p></div><div class="amt num">${fmt(a.amount)} <span class="sub">NEAR</span>${isOwnerAcct() && S.network === 'testnet' ? `<button class="btn ghost sm" data-cancel="${esc(a.ref)}" style="margin-top:8px">Cancel</button>` : ''}</div></div>`).join('') : `<div class="empty">No approved invoices are open. Approve one below and the AI can pay exactly that, once.</div>`;
+    const list = S.approvals.length ? S.approvals.map((a) => `<div class="appr"><div><h3>${esc(a.ref)}</h3><p class="sub" style="word-break:break-all">to ${esc(a.to)}</p><p class="sub">${a.expired ? 'Expired. Cancel it to reuse the reference.' : a.minutesLeft + ' min left. One use, exact amount.'}</p></div><div class="amt num">${fmt(a.amount)} <span class="sub">NEAR</span>${isOwnerAcct() && S.network === 'testnet' ? `<button class="btn ghost sm" data-cancel="${esc(a.ref)}" style="margin-top:8px">Cancel</button>` : ''}</div></div>`).join('') : `<div class="empty">No approved invoices are open. Approve one below and the AI can pay exactly that, once.</div>`;
     return `<h1 class="in">Approvals</h1>
     <p class="lede in">An approval says: pay this person this exact amount for this invoice, once. The contract checks that the payment exactly matches the approved recipient, amount, invoice number and deadline. Any difference and it refuses.</p>
     <section class="slab in" style="padding-top:12px;padding-bottom:12px">${list}</section>
@@ -309,9 +309,9 @@ function bind(r) {
       const b = e.currentTarget; if (busy) return; busy = true; b.disabled = true; b.textContent = 'Reading';
       try {
         const res = await api('/api/agent', { method: 'POST', body: $('doc').value }); await refresh();
-        const acts = S.activity.slice(0, res.results.length).reverse();
+        const acts = res.results.map((x) => S.activity.find((a) => a.id === x.id) || { outcome: 'info' });
         $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : '<div class="empty">The AI found no payments in this text.</div>';
-        for (const a of acts) await railPlay(a);
+        for (const a of acts) if (a.id) await railPlay(a);
       } catch (err) { $('invres').innerHTML = `<div class="empty">Something went wrong: ${esc(err.message)}. Check the terminal running npm run web.</div>`; }
       b.disabled = false; b.textContent = 'Read this invoice'; busy = false;
     };

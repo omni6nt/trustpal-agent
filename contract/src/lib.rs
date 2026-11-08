@@ -559,6 +559,55 @@ mod tests {
         c
     }
 
+
+    /// Run the callback the way NEAR would after the transfer: with the transfer's result.
+    fn settle(c: &mut PolicyContract, reference: &str, transfer_ok: bool) {
+        let ctx = VMContextBuilder::new()
+            .current_account_id(contract_id())
+            .predecessor_account_id(contract_id())
+            .account_balance(NearToken::from_near(100))
+            .block_timestamp(NS_PER_DAY * 10)
+            .build();
+        let result = if transfer_ok { near_sdk::PromiseResult::Successful(vec![]) } else { near_sdk::PromiseResult::Failed };
+        testing_env!(ctx, near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![result]);
+        c.on_paid(reference.to_string());
+    }
+
+    #[test]
+    fn a_failed_transfer_releases_the_daily_reservation_but_burns_the_reference() {
+        let mut c = setup();
+        let _ = c.pay(alex(), U128(2 * NEAR), "inv-f".to_string());
+        assert_eq!(c.get_policy().reserved_today.0, 2 * NEAR);
+        settle(&mut c, "inv-f", false);
+        assert_eq!(c.get_payment("inv-f".to_string()).unwrap().status, PaymentStatus::Failed);
+        assert_eq!(c.get_policy().reserved_today.0, 0, "the failed amount must not keep eating the daily cap");
+        assert_eq!(c.get_policy().pending_total.0, 0);
+        // The reference stays used, so the same reference cannot be paid again (the owner uses a new one).
+        ctx(owner(), NS_PER_DAY * 10);
+        let again = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let _ = c.pay(alex(), U128(2 * NEAR), "inv-f".to_string()); }));
+        assert!(again.is_err(), "a failed reference must not be payable again");
+    }
+
+    #[test]
+    fn a_successful_transfer_keeps_the_reservation_and_completes() {
+        let mut c = setup();
+        let _ = c.pay(alex(), U128(2 * NEAR), "inv-ok".to_string());
+        settle(&mut c, "inv-ok", true);
+        assert_eq!(c.get_payment("inv-ok".to_string()).unwrap().status, PaymentStatus::Completed);
+        assert_eq!(c.get_policy().reserved_today.0, 2 * NEAR);
+        assert_eq!(c.get_policy().pending_total.0, 0);
+    }
+
+    #[test]
+    fn two_payments_cannot_together_pass_the_daily_cap() {
+        let mut c = setup(); // daily cap 8 NEAR, per payment 5
+        let _ = c.pay(alex(), U128(5 * NEAR), "inv-1".to_string());
+        let second = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let _ = c.pay(alex(), U128(4 * NEAR), "inv-2".to_string()); }));
+        assert!(second.is_err(), "5 + 4 NEAR is over the 8 NEAR daily cap, even before the first transfer has settled");
+        let _ = c.pay(alex(), U128(3 * NEAR), "inv-3".to_string()); // exactly 8 is allowed
+        assert_eq!(c.get_policy().reserved_today.0, 8 * NEAR);
+    }
+
     #[test]
     fn pays_an_approved_recipient_within_limits() {
         let mut c = setup();
