@@ -49,6 +49,8 @@ npm run test:contract   # 28 contract tests; needs Rust and Cargo 1.85 or newer
 npm run web          # landing page + dashboard (practice mode): http://localhost:3000
 ```
 
+`npm install` may report vulnerabilities. They are in the build tools for the browser wallet bundle (dev dependencies, not shipped); `npm audit --omit=dev` reports none for the app itself.
+
 The full 5-minute walkthrough is in [DEMO.md](DEMO.md).
 
 Live testnet: copy `.env.example` to `.env` with the agent key and accounts, then `npm run web -- --live`. To rebuild the deployment from scratch, run `scripts/setup-testnet.sh` (needs Linux or a Codespace, near-cli-rs, cargo-near, a funded testnet owner account, and a policy account name that does not exist yet). Without the agent key a visitor cannot run the live path; practice mode needs nothing but Node.
