@@ -220,6 +220,8 @@ const ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]
 function codespaceOrigin(o: string): boolean {
   const cn = process.env.CODESPACE_NAME?.toLowerCase(), dom = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN?.toLowerCase();
   if (!cn || !dom) return false;
+  // The Codespaces forwarding proxy can hand the server its own https://localhost origin; the session cookie (SameSite=Lax) still has to match.
+  if (o.toLowerCase() === `https://localhost:${PORT}` || o.toLowerCase() === `https://127.0.0.1:${PORT}`) return true;
   try { const u = new URL(o.toLowerCase()); return u.protocol === 'https:' && u.hostname.endsWith(`.${dom}`) && u.hostname.startsWith(`${cn}-`); } catch { return false; }
 }
 // Sign-in for the local dashboard. In live mode (or when DASHBOARD_TOKEN is set) the pages that act and the whole API
