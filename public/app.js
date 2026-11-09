@@ -125,8 +125,24 @@ const screens = {
       [`Only people you approved, or exact invoices you approved`], S.paused ? ['Payments are paused', true] : ['You can pause everything instantly'],
       [S.cooldown ? `New payees wait ${fmt(S.cooldown / 60, 2)} min before the AI can pay them` : 'New payees can be paid straight away'],
     ];
+    const ai = S.activity.filter((x) => x.label === 'Invoice read by the AI');
+    const waiting = ai.filter((x) => /^HELD|^DECLINED/.test(x.headline)).length;
+    const executed = S.activity.filter((x) => x.outcome === 'paid').length;
+    const open = S.approvals.filter((x) => !x.expired).length;
+    const need = open + waiting;
+    const stage = (n, label, sub, on) => `<div class="stg ${on ? 'on' : ''}"><b class="num">${n}</b><span>${label}</span><small>${sub}</small></div>`;
+    const setup = [
+      [S.network !== 'testnet' || !!walletAcct, S.network === 'testnet' ? 'Connect your wallet' : 'Practice mode needs no wallet', S.network === 'testnet' ? '#approvals' : '#overview'],
+      [(S.recipients || []).length > 0, 'Check your rules and the people you pay', '#owner'],
+      [S.activity.some((x) => x.label === 'Invoice read by the AI'), 'Read your first invoice', '#invoices'],
+    ];
+    const todo = setup.filter((x) => !x[0]).length;
+    const first = todo ? `<section class="slab in setup"><h2>Set up in three steps</h2><ul class="steps">${setup.map((x, i) => `<li class="${x[0] ? 'done' : ''}"><b>${x[0] ? '✓' : i + 1}</b><a href="${x[2]}">${esc(x[1])}</a></li>`).join('')}</ul></section>` : '';
     return `<h1 class="in">An AI runs your payments. It can't rob you.</h1>
-    <p class="lede in">The AI reads invoices and proposes payments. It never holds your money or your main key. The contract decides what actually leaves.</p>
+    <p class="lede in">The AI reads invoices and proposes payments. It never holds your money or your main key. Whatever it is tricked into, the contract lets no more than your daily limit leave in a day, and the AI cannot approve payments or change your rules.</p>
+    ${first}
+    <section class="attention-card in"><div class="attention-copy"><span class="eyebrow">${need ? 'Needs you' : 'All clear'}</span><h2>${need ? `${need} payment${need === 1 ? '' : 's'} need${need === 1 ? 's' : ''} your attention` : 'Nothing needs your decision right now'}</h2><p>${need ? 'Nothing moves until you approve it.' : 'People on your list are paid within your limits when an invoice matches. Everything else waits for you.'}</p></div><div class="attention-actions"><a class="btn" href="#invoices">Read an invoice</a><a class="btn ghost" href="#approvals">Approvals</a></div></section>
+    <section class="slab in stages" aria-label="Where payments are"><h2>Where your payments are</h2><p class="sub" style="margin:-8px 0 16px">Only the last stage moves money.</p><div class="stgrow">${stage(ai.length, 'Proposed by AI', 'not trusted until checked', ai.length)}<i></i>${stage(waiting, 'Waiting for you', 'nothing moves yet', waiting)}<i></i>${stage(open, 'Approved by you', 'locked on the blockchain', open)}<i></i>${stage(executed, 'Executed', 'confirmed by the contract', executed)}</div></section>
     <section class="slab in story"><h2>A day at a small studio</h2><p>A client pays the studio 10 NEAR. The contract splits it at once: shares go to the collaborators, the rest stays in the treasury. Later a contractor's invoice arrives. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract still refuses, because the owner never approved that exact payment.</p></section>
     <section class="slab hero in"><div><div class="label">Contract balance</div><div class="bal num"><span id="bal">0</span><small>NEAR</small></div>
       <p class="sub">${fmt(S.revenue)} NEAR received from clients. ${fmt(S.pending)} NEAR on its way out.</p></div>
@@ -142,8 +158,9 @@ const screens = {
     <section class="in"><h2 style="margin-bottom:18px">Recent activity</h2>${S.activity.length ? `<ul class="tl">${S.activity.slice(0, 5).map((a) => feedItem(a)).join('')}</ul>` : `<div class="empty">Nothing yet. Open the Security lab and run an attack, or let the AI read an invoice.</div>`}</section>`;
   },
   invoices() {
-    return `<h1 class="in">Let the AI read an invoice</h1>
-    <p class="lede in">Paste any invoice or email. The AI lists the payments it thinks it should make, and each one travels along the path of four checks. The sample hides an instruction aimed at the AI.</p>
+    return `<h1 class="in">Payments</h1>
+    <p class="lede in">Paste an invoice. The AI reads it and each payment travels along four checks. People already on your list are paid within your limits when the amount matches the invoice total. New payees, and any amount that does not match, always wait for you. The sample hides an instruction aimed at the AI.</p>
+    <div class="payment-steps in"><span><b>1</b> AI reads</span><i></i><span><b>2</b> Trustpal checks</span><i></i><span><b>3</b> You approve if needed</span><i></i><span><b>4</b> Contract executes</span></div>
     <section class="slab in"><label for="doc">Invoice text<textarea id="doc" spellcheck="false" style="margin-top:7px"></textarea></label>
       <div class="row" style="margin-top:18px"><button class="btn" id="readbtn">Read this invoice</button><button class="btn ghost" id="cleanbtn">Use a clean invoice</button><span class="sub">AI in use: ${esc(S.ai)}</span></div>
       <div id="invres" style="margin-top:14px"></div></section>`;
@@ -158,7 +175,7 @@ const screens = {
       <p class="sub" style="margin-bottom:18px">${S.canEdit ? 'Practice mode applies it instantly. The same approval on testnet needs your owner key, so copy the command below.' : 'Prefer the terminal? Fill this in and run the command in your Codespace. The wallet button above does the same thing.'}</p>
       <div class="formgrid"><label>Invoice number<input id="aref" value="INV-2001"></label><label>Pay to<input id="ato" value="${esc(S.recipients[0] || '')}"></label><label>Amount (NEAR)<input id="aamt" value="0.5" inputmode="decimal"></label></div>
       <div class="row" style="margin-top:18px">${S.canEdit ? '<button class="btn" id="aapply">Approve this payment</button>' : ''}</div>
-      ${cmdBox('acmd', '')}<p class="note" id="aerr"></p></section>`;
+      ${S.canEdit ? cmdBox('acmd', '') : `<details class="advanced-details"><summary>Advanced: use a terminal command instead</summary>${cmdBox('acmd', '')}</details>`}<p class="note" id="aerr"></p></section>`;
   },
   revenue() {
     return `<h1 class="in">Revenue split</h1>
@@ -372,7 +389,7 @@ function ribbonHtml() {
   const chip = walletAcct
     ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'View only'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
     : `<button class="wchip" id="wconn"><i></i>Connect wallet</button>`;
-  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. This page never holds your owner key. Approvals are signed in your wallet; other owner changes are commands you run yourself.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
+  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. You approve payments in your wallet.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
 }
 function bindWallet() {
   const c = $('wconn'), o = $('wout');
@@ -402,6 +419,7 @@ function walletApproveBlock() {
   return `<p class="sub">You are signed in as the owner. Review the exact payment, then confirm it in your wallet. This is a <b>real test-network transaction</b>.</p>
     <div class="formgrid" style="margin-top:14px"><label>Valid for (hours)<input id="whrs" value="2" inputmode="decimal"></label></div>
     <div class="row" style="margin-top:14px"><button class="btn" id="wapprove">Review and approve</button></div>
+    <p class="note" style="margin-top:10px">Wallet not working? Use the command under Advanced below.</p>
     <div class="confirm" id="wconfirm" hidden></div>${tx}`;
 }
 function bindWalletApprove() {
@@ -434,6 +452,7 @@ async function cancelWallet(ref) {
 
 async function show() {
   route = (location.hash.slice(1) in screens) ? location.hash.slice(1) : 'overview';
+  document.body.dataset.route = route;
   document.querySelectorAll('[data-r]').forEach((a) => a.classList.toggle('on', a.dataset.r === route)); placeNav();
   try { await refresh(); } catch { $('main').innerHTML = '<div class="empty">Can\'t reach the Trustpal server. Is <code>npm run web</code> still running?</div>'; return; }
   document.body.dataset.route = route; layoutRail();

@@ -13,6 +13,7 @@
     "attack": "node --experimental-strip-types src/attack.ts",
     "verify-live": "node --experimental-strip-types scripts/verify-live.ts",
     "ai-models": "node --experimental-strip-types scripts/ai-models.ts",
+    "redteam": "node --experimental-strip-types scripts/redteam.ts",
     "key-limits": "node --experimental-strip-types scripts/key-limits.ts",
     "web": "node --experimental-strip-types src/web.ts",
     "build:wallet": "node wallet/build.mjs",

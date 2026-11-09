@@ -281,3 +281,33 @@ label{display:grid;gap:7px;font-weight:600;font-size:var(--fs-sm);color:var(--c4
 @media (max-width:900px){.ribbon>span:not(.wchip){flex-basis:100%}.ribbon .wchip{margin-left:0;width:100%}}
 [hidden]{display:none!important}
 @media (max-width:400px){.aside.c .pill{padding-top:30px}.aside.c .pill b{white-space:normal;font-size:10.5px;line-height:1.05}}
+
+/* v17: simpler Home, honest payment stages, advanced details folded away */
+.eyebrow{margin:0 0 8px;color:var(--c4);font-size:12px;font-weight:700;letter-spacing:.04em}
+.attention-card{display:flex;justify-content:space-between;align-items:center;gap:22px;padding:24px 28px;margin:0 0 20px;border-radius:24px;background:linear-gradient(110deg,#253745 0%,#172b38 70%,#11212D 100%);border:1px solid #9ba8ab24;box-shadow:inset 0 1px 0 #ffffff12}
+.attention-copy h2{margin:0 0 5px;font-size:19px}
+.attention-copy p{margin:0;color:var(--c4);font-size:var(--fs-sm);max-width:52ch}
+.attention-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.attention-actions .btn{white-space:nowrap;text-decoration:none}
+.stages h2{margin-bottom:16px}
+.stgrow{display:flex;align-items:stretch;gap:10px}
+.stgrow i{flex:0 0 18px;align-self:center;height:1px;background:#9ba8ab44}
+.stg{flex:1;display:grid;gap:3px;padding:14px 16px;border-radius:18px;background:#11212D;border:1px solid #cccfce18}
+.stg b{font-size:26px;color:var(--c4)}.stg span{color:#fff;font-weight:700;font-size:var(--fs-sm)}.stg small{color:var(--c4);font-size:12px}
+.stg.on b{color:var(--ok)}
+.payment-steps{display:flex;align-items:center;gap:12px;margin:0 0 22px;color:var(--c4);font-size:var(--fs-sm);font-weight:700;flex-wrap:wrap}
+.payment-steps span{display:flex;align-items:center;gap:8px}
+.payment-steps b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:var(--c2);color:#fff;font-size:12px}
+.payment-steps i{width:28px;height:1px;background:#9ba8ab55}
+.advanced-details{margin-top:18px;padding-top:14px;border-top:1px solid #cccfce20}
+.advanced-details summary{cursor:pointer;color:var(--c4);font-size:var(--fs-sm);font-weight:700}
+.advanced-details[open] summary{margin-bottom:10px}
+/* The four-gate rail matters while paying or testing; elsewhere it only competes with the page. */
+@media (min-width:1181px){body:not([data-route=invoices]):not([data-route=security]) .aside{display:none}body:not([data-route=invoices]):not([data-route=security]) .app{grid-template-columns:216px minmax(0,1fr)}}
+@media (max-width:900px){.attention-card{align-items:flex-start;flex-direction:column}.attention-actions{justify-content:flex-start;width:100%}.attention-actions .btn{flex:1;text-align:center}.stgrow{flex-wrap:wrap}.stgrow i{display:none}.stg{flex:1 1 calc(50% - 10px)}.payment-steps{gap:8px}.payment-steps i{width:12px}}
+
+.setup h2{margin-bottom:14px}.steps{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.steps li{display:flex;align-items:center;gap:12px;font-size:var(--fs-sm)}
+.steps b{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--c2);color:#fff;font-size:12px}
+.steps li.done b{background:#0f3a33;color:var(--ok)}.steps li.done a{color:var(--c4);text-decoration:line-through}
+.steps a{color:#fff;font-weight:650;text-decoration:none}.steps a:hover{text-decoration:underline}
