@@ -1,6 +1,6 @@
 # Trustpal Defence Note
 
-Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR is the only thing that can move money.
+Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR is the only thing that can move money. "Cannot rob" is precise: the AI cannot pay a stranger or change any rule, and the most it can lose is bounded by the owner's per-payment limit and daily cap. It can still be fooled into a wrong amount for someone already on the list, within those limits; AI-proposed amounts that do not match the invoice total are held for the owner.
 
 ## Judge demo path (5 minutes)
 
@@ -66,7 +66,7 @@ These are the values only the owner sets. The contract enforces them and the AI 
 | New-payee wait | A newly added payee cannot be paid until a delay has passed | Set to 120 seconds on the testnet deployment. It applies to standing payees, not to an exact owner approval |
 | Exact-payment approval | Reference, recipient, amount and expiry, approved by the owner | Single use. Valid for up to 30 days. Can be cancelled |
 | Revenue split | When a client pays the business, shares go to named accounts automatically | Up to 10 shares, in basis points, total at most 100%. What is not handed out, plus any rounding remainder, stays in the treasury. The contract does not record whether each share arrived; it relies on NEAR returning an undelivered share to the contract, which was not tested |
-| Pause | Stops all payments at once | Owner only |
+| Pause | Stops all outgoing payments at once (client money can still arrive) | Owner only |
 | Withdraw | The owner can take money out | Cannot touch money already reserved for pending payments |
 | One-time references | Every invoice reference can be paid once | Stops replay |
 
@@ -98,12 +98,12 @@ Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testne
 **2. Tested offline**
 
 - 31 contract unit tests covering limits, approvals, cooldown, split rounding, pause, withdraw protection, the failed-transfer callback (reservation released, reference stays used) and two payments racing the daily cap.
-- 39 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's sign-in, Host/Origin checks and framing headers. `npm test` does not run the contract tests; `npm run test:contract` does.
+- 49 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's sign-in, Host/Origin checks and framing headers. `npm test` does not run the contract tests; `npm run test:contract` does.
 - Checked by hand, not by automated tests: the dashboard and the owner settings in a browser at desktop, laptop and phone widths.
 
 **3. Simulated or prototype**
 
-- The AI is a scripted stand-in unless an API key is provided. It is built to be gullible so the defences get tested.
+- The AI is a scripted stand-in unless GEMINI_API_KEY or ANTHROPIC_API_KEY is provided. The stand-in is built to be gullible so the defences get tested. With a real model, a failure or refusal proposes nothing (it never falls back to the stand-in), and every proposed amount is checked against the invoice's own stated total; anything that does not match is held for the owner.
 - The dashboard's practice mode runs on an in-memory copy of the rules, not on the network.
 - The dashboard's gate animation is a replay of the real result after it returns; it is not a live stream from the chain.
 
@@ -145,6 +145,7 @@ A defence note that hides its weak points is not a defence. These are the real o
 - **The approval lane is not capped by the per-payment limit.** An exact owner approval can be larger than the limit; it still counts toward the daily cap.
 - **The guard can degrade.** If the network lookup of an account fails, the guard warns instead of blocking. The contract is unaffected.
 - **The local dashboard server holds the agent key in live mode.** It now refuses requests from other websites (Host and Origin checks), but anyone with access to the machine can use it. The agent key can still only call `pay`.
+- **The default AI is scripted.** With a model key, invoice text leaves the machine for the model provider (Google or Anthropic), so only test invoices should be used. If the owner key is lost there is no recovery: the contract has no owner-change function.
 - **The AI is scripted by default.** The attack results show the defences work against a gullible AI. They do not measure how often a real model is fooled. That needs a red-team run with a real model and an API key.
 - **The gate animation is a replay.** The dashboard plays the real result after it returns. It places the stop at the gate whose rule failed, but the contract performs all of those checks in one call.
 - **The agent key's gas allowance runs out.** It is small by design and must be topped up by the owner.
@@ -184,7 +185,7 @@ A scan of other entries, gathered by the team and not independently verified, sh
 
 ```bash
 npm install
-npm test            # 39 application tests (Node 22.18+)
+npm test            # 49 application tests (Node 22.6+)
 npm run test:contract   # 31 contract tests (Rust/Cargo 1.85+)
 npm run attack      # the attack suite against the offline chain
 npm run web         # dashboard in practice mode at http://localhost:3000

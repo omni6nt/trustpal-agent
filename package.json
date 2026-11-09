@@ -5,14 +5,15 @@
   "type": "module",
   "license": "MIT",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.6"
   },
   "scripts": {
-    "test": "node --test test/*.test.ts",
-    "keygen": "node scripts/keygen.ts",
-    "attack": "node src/attack.ts",
-    "key-limits": "node scripts/key-limits.ts",
-    "web": "node src/web.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "keygen": "node --experimental-strip-types scripts/keygen.ts",
+    "attack": "node --experimental-strip-types src/attack.ts",
+    "verify-live": "node --experimental-strip-types scripts/verify-live.ts",
+    "key-limits": "node --experimental-strip-types scripts/key-limits.ts",
+    "web": "node --experimental-strip-types src/web.ts",
     "build:wallet": "node wallet/build.mjs",
     "test:contract": "cargo test --manifest-path contract/Cargo.toml"
   },

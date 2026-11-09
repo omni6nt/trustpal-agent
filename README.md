@@ -2,6 +2,10 @@
 
 **A business an AI can run but cannot rob.**
 
+**What "cannot rob" means, precisely.** The AI cannot pay a stranger, change any rule, approve its own payments, add a key or call any other contract, and the contract enforces that. It can still be fooled into a *wrong amount* for someone already on your list, but never above your per-payment limit or your daily cap, and an AI-proposed amount that does not match the invoice total is held for the owner instead of paid. So the worst case is bounded by the limits you set, not unlimited. (An owner-approved payment is exact and is not capped by the per-payment limit; it still counts toward the daily cap.)
+
+**Two-minute judge path (needs no keys):** `npm install`, `npm test`, `npm run web`, open the link it prints, open **Security lab**, press **Run all five**. For the live testnet evidence without any keys: `npm run verify-live`.
+
 Trustpal gives an AI a role in a small business's payment operations without giving it unrestricted control of the business's money. The AI reads invoices and proposes payments. The owner approves the exact payment. A smart contract on NEAR is the only thing that can move money, and it enforces the owner's rules whatever the AI is told.
 
 Built for NEAR HACKATHON, Nov 2026. Tracks: Autonomous Business (lead) and AI Security & Defense. Written during the hackathon window (first commit 1 Nov 2026).
@@ -36,17 +40,18 @@ If the AI is fooled: the contract still enforces the owner's approval.
 | Group | What | Detail |
 | --- | --- | --- |
 | **Live on NEAR testnet** | Fraud refused; approved invoice paid; replay rejected; AI key refused 6 of 6 forbidden actions (re-run with the stricter `npm run key-limits`, which prints the key's real permission and treats network errors as inconclusive); revenue split 0.5 / 0.2 / 0.3 | Transaction ids and steps in [DEMO.md](DEMO.md) |
-| **Tested offline** | 31 contract unit tests (including the failed-transfer callback and two payments racing the daily cap), 39 application tests (guard, AI layer, activity log, offline simulation, dashboard server and its sign-in) | `npm test` and `npm run test:contract` |
-| **Simulated / prototype** | Scripted AI (unless an API key is set); dashboard practice mode; animation is a replay of the real result | Labelled on every dashboard screen |
+| **Tested offline** | 31 contract unit tests (including the failed-transfer callback and two payments racing the daily cap), 49 application tests (guard, AI layer, activity log, offline simulation, dashboard server and its sign-in) | `npm test` and `npm run test:contract` |
+| **Simulated / prototype** | Scripted AI (unless GEMINI_API_KEY or ANTHROPIC_API_KEY is set); dashboard practice mode; animation is a replay of the real result | Labelled on every dashboard screen |
 
 ## Run it
 
 ```bash
-node --version       # must be 22.18 or newer (the tests run TypeScript files directly)
+node --version       # 22.6 or newer (the scripts run TypeScript files directly)
 npm install
-npm test             # 39 application tests (does NOT run the contract tests)
+npm test             # 49 application tests (does NOT run the contract tests)
 npm run test:contract   # 31 contract tests; needs Rust and Cargo 1.85 or newer
 npm run web          # landing page + dashboard (practice mode): http://localhost:3000
+npm run verify-live  # read-only check of the live testnet deployment (no keys needed)
 ```
 
 `npm install` may report vulnerabilities. They are in the build tools for the browser wallet bundle (dev dependencies, not shipped); `npm audit --omit=dev` reports none for the app itself.
@@ -66,7 +71,7 @@ Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can 
 | `contract/` | Rust smart contract (near-sdk 5), 31 unit tests |
 | `src/chain.ts` | Chain interface, offline simulation of the contract's main rules, NEAR testnet client |
 | `src/guard.ts`, `src/counterparty.ts` | Payee checks and the payment guard |
-| `src/assistant.ts` | AI layer: scripted stand-in, optional real Claude model |
+| `src/assistant.ts` | AI layer: scripted stand-in, optional real model (Gemini or Claude); fails closed if the model fails |
 | `src/trust.ts` | Hash-chained activity log (kept in a local file in live mode) |
 | `src/web.ts`, `public/` | Dashboard server and site |
 | `scripts/` | `owner.sh`, `setup-testnet.sh`, `keygen.ts`, `key-limits.ts` |
@@ -76,7 +81,7 @@ Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can 
 
 ## Honest limits
 
-Testnet only. Not audited. Native NEAR only (NEP-141 stablecoins are the next step for the Real-World Money track). The owner key is the master key: if stolen, every rule can be changed; a hardware wallet or multisig owner is the intended next step. Approvals are signed in a wallet, but other owner changes still use the command line, and there are no email accounts or team roles yet. The contract holds each business's rules, but only one business is deployed (`omni6nt-policy3.testnet`); a factory for many businesses is future work. A failed transfer burns its invoice reference, and an expired approval keeps its reference until cancelled, so the owner uses a new reference. The policy account has its own full-access key from deployment, which can redeploy the contract; delete it to freeze the code. The look-alike check is a heuristic in the guard; the contract does not need it, because unapproved addresses are rejected anyway. The AI is a scripted stand-in unless an API key is set. The code was written with AI assistance (Claude); the deployment and every live test were run by the team.
+Testnet only. Not audited. **If the owner key is lost there is no recovery**: the contract has no owner-change function, so its rules and funds cannot be changed or withdrawn (a multisig or hardware-wallet owner is the intended fix). When a Gemini or Claude key is set, invoice text is sent to that provider (Google or Anthropic) to be read; use test invoices only. The AI reads pasted invoice text only (no PDF or email intake), and if the model fails it proposes nothing. Native NEAR only (NEP-141 stablecoins are the next step for the Real-World Money track). The owner key is the master key: if stolen, every rule can be changed; a hardware wallet or multisig owner is the intended next step. Approvals are signed in a wallet, but other owner changes still use the command line, and there are no email accounts or team roles yet. The contract holds each business's rules, but only one business is deployed (`omni6nt-policy3.testnet`); a factory for many businesses is future work. A failed transfer burns its invoice reference, and an expired approval keeps its reference until cancelled, so the owner uses a new reference. The policy account has its own full-access key from deployment, which can redeploy the contract; delete it to freeze the code. The look-alike check is a heuristic in the guard; the contract does not need it, because unapproved addresses are rejected anyway. The AI is a scripted stand-in unless an API key is set. The code was written with AI assistance (Claude); the deployment and every live test were run by the team.
 
 See [DEFENCE_NOTE.md](DEFENCE_NOTE.md) for the full list.
 

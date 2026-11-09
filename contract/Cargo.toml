@@ -2,7 +2,7 @@
 name = "trustpal-policy"
 version = "0.1.0"
 edition = "2021"
-description = "Trustpal policy contract: on-chain recipient allowlist, per-payment and daily limits, pause switch."
+description = "Trustpal policy contract: recipient allowlist, per-payment and daily limits, exact one-time owner approvals, revenue split, pause switch."
 license = "MIT"
 
 [lib]

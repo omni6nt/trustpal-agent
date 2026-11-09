@@ -15,7 +15,7 @@ function call(path: string, cookie?: string, method = 'GET'): Promise<{ status: 
   });
 }
 before(async () => {
-  srv = spawn(process.execPath, ['src/web.ts'], { env: { ...process.env, PORT: String(PORT), DASHBOARD_TOKEN: TOKEN }, stdio: 'ignore' });
+  srv = spawn(process.execPath, ['--experimental-strip-types', 'src/web.ts'], { env: { ...process.env, PORT: String(PORT), DASHBOARD_TOKEN: TOKEN }, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) { try { await call('/'); return; } catch { await new Promise((r) => setTimeout(r, 100)); } }
   throw new Error('server did not start');
 });

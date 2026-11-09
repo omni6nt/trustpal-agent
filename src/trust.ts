@@ -6,6 +6,7 @@ export type ClaimStatus = 'completed' | 'failed' | 'refunded' | 'blocked';
 export interface ClaimInput {
   subject: string; // the counterparty the claim is about
   amountUsd: number;
+  amountNear?: string; // the NEAR amount (decimal text) when the claim is about a NEAR payment
   status: ClaimStatus;
   ref: string; // invoice or payment reference
   at?: string; // ISO timestamp, defaults to now
@@ -14,6 +15,7 @@ export interface ClaimInput {
 export interface Claim {
   subject: string;
   amountUsd: number;
+  amountNear?: string;
   status: ClaimStatus;
   ref: string;
   at: string;
@@ -25,7 +27,8 @@ const GENESIS = '0'.repeat(64);
 
 function hashClaim(prev: string, c: Omit<Claim, 'prev' | 'hash'>): string {
   return createHash('sha256')
-    .update(JSON.stringify([prev, c.subject, c.amountUsd, c.status, c.ref, c.at]))
+    // amountNear joins the hash only when present, so older logs without it still verify
+    .update(JSON.stringify(c.amountNear === undefined ? [prev, c.subject, c.amountUsd, c.status, c.ref, c.at] : [prev, c.subject, c.amountUsd, c.status, c.ref, c.at, c.amountNear]))
     .digest('hex');
 }
 
@@ -49,6 +52,7 @@ export class Ledger {
     const base = {
       subject: input.subject,
       amountUsd: input.amountUsd,
+      ...(input.amountNear !== undefined ? { amountNear: input.amountNear } : {}),
       status: input.status,
       ref: input.ref,
       at: input.at ?? new Date().toISOString(),
@@ -76,25 +80,5 @@ export class Ledger {
 
   completedCount(subject: string): number {
     return this.about(subject).filter((c) => c.status === 'completed').length;
-  }
-
-  /** 0-100. Starts neutral at 50; completed +10, refunded -5, failed -20. */
-  score(subject: string): number {
-    let s = 50;
-    for (const c of this.about(subject)) {
-      if (c.status === 'completed') s += 10;
-      else if (c.status === 'refunded') s -= 5;
-      else if (c.status === 'blocked') continue; // a refused attempt is not a payment outcome
-      else s -= 20;
-      s = Math.max(0, Math.min(100, s));
-    }
-    return s;
-  }
-
-  spentToday(now: Date = new Date()): number {
-    const day = now.toISOString().slice(0, 10);
-    return this.claims
-      .filter((c) => c.status === 'completed' && c.at.slice(0, 10) === day)
-      .reduce((sum, c) => sum + c.amountUsd, 0);
   }
 }

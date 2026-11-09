@@ -8,7 +8,7 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 
 ## Who we assume can be hostile
 
-- Anyone who can put text in front of the AI (invoice authors, email senders, web pages).
+- Anyone who can put text in front of the AI (invoice authors). Today the app accepts pasted invoice text only; there is no email, web-page or PDF intake, so those would be future attack surfaces.
 - Anyone who steals the agent key.
 - The AI itself, if manipulated.
 
@@ -33,7 +33,7 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 | Drain by many small payments | Daily limit with reservation before transfer | Contract | Unit tests |
 | Instantly paying a brand-new payee | New-payee wait | Contract | Unit tests |
 | Editing a logged entry | Hash chain no longer verifies | Application | Offline tests. Not covered: deleting the newest entries, or rewriting the whole log and its hashes. The log is not on-chain. |
-| A person or program that can reach the local dashboard without the owner's session | Live mode needs the private sign-in link, a session cookie and a Host check; warnings are never auto-approved in live mode | Dashboard server | Offline tests (`test/web-lock.test.ts`) |
+| A person or program that can reach the local dashboard without the owner's session | Live mode needs the private sign-in link, a session cookie and a Host check; warnings are never auto-approved in live mode (including the Security lab) | Dashboard server | Offline tests (`test/web-lock.test.ts`) |
 | A hostile page frames the dashboard to trick a click | `X-Frame-Options: DENY` and `frame-ancestors 'none'` | Dashboard server | Offline test |
 | A website open in the owner's browser calls the local dashboard | Host and Origin checks refuse other sites and DNS rebinding | Dashboard server | Offline tests (`test/web.test.ts`) |
 

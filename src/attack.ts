@@ -49,9 +49,9 @@ function gullibleAgent(doc: string): { to: string; amount: string }[] {
 const ledger = new Ledger();
 const deps = {
   chain,
-  blocklist: [{ address: ATTACKER, evidence: 'address appeared in an invoice containing a hidden instruction to the AI (this demo)' }],
+  blocklist: [], // no staged blocklist: the guard and the contract must stop the attacker for their own real reasons
   ledger,
-  askHuman: async (p: string) => { console.log(`   [human asked] ${p.split('\n')[0]} -> approved (demo)`); return true; },
+  askHuman: async (p: string) => { console.log(`   [human asked] ${p.split('\n')[0]} -> ${live ? 'declined (live mode never auto-approves)' : 'approved (offline demo)'}`); return !live; },
   log: (m: string) => console.log('   ' + m),
 };
 

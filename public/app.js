@@ -199,11 +199,11 @@ const screens = {
     <section class="slab in"><h2>What happens when a client pays</h2><ul class="cc">${liI('The client pays through the link and confirms in their own wallet', true)}${liI('The contract splits the money by your revenue split in the same moment', true)}${liI('Whatever you do not hand out stays in your treasury', true)}${liI('A plain transfer to the address above lands in the treasury but is not split. Use the link.', false)}</ul></section>`;
   },
   agent() {
-    const src = (S.ai || '').startsWith('Claude') ? 'Claude, a real AI model' : 'A scripted stand-in (no API key set)';
+    const src = /^(Claude|Gemini)/.test(S.ai || '') ? (S.ai || '').replace(' (real model)', '') + ', a real AI model' : 'A scripted stand-in (no API key set)';
     const recent = (S.activity || []).slice(0, 5);
     return `<h1 class="in">AI agent</h1>
     <p class="lede in">The agent reads your invoices and prepares payments. It never decides what is safe to pay: you and the contract do.</p>
-    <div class="grid2"><section class="slab in"><h2>Which AI is working</h2><p class="sub">${esc(src)}</p><p class="note">${(S.ai || '').startsWith('Claude') ? 'It reads real invoice text.' : 'The stand-in is built to be easy to fool, so the defences get tested honestly. Setting ANTHROPIC_API_KEY switches to a real model.'}</p></section>
+    <div class="grid2"><section class="slab in"><h2>Which AI is working</h2><p class="sub">${esc(src)}</p><p class="note">${/^(Claude|Gemini)/.test(S.ai || '') ? 'It reads real invoice text.' : 'The stand-in is built to be easy to fool, so the defences get tested honestly. Setting GEMINI_API_KEY or ANTHROPIC_API_KEY switches to a real model.'}</p></section>
     <section class="slab in"><h2>Its key</h2><p class="sub">A key on your account that can call <b style="color:#fff">pay</b> on Trustpal and nothing else.</p>${S.agentPubKey ? cmdBox('agentpk', S.agentPubKey) : '<p class="note">Practice mode has no real key. On testnet its public key shows here.</p>'}</section></div>
     <section class="slab in"><h2>What it can do</h2><ul class="cc">${liI('Read invoices and emails you give it', true)}${liI('Propose payments', true)}${liI('Send a payment you approved, exactly as approved', true)}${liI('Pay people on your list, within your limits', true)}</ul></section>
     <section class="slab in"><h2>What it cannot do</h2><ul class="cc">${liI('Approve its own payments', false)}${liI('Change your limits, your list or your split', false)}${liI('Add keys, send money freely or call other contracts', false)}</ul>

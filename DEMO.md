@@ -1,12 +1,12 @@
 # Judge demo path (about 5 minutes)
 
-Two ways to see Trustpal. Start with A: it needs nothing but Node 22.18 or newer (`node --version`).
+Two ways to see Trustpal. Start with A: it needs nothing but Node 22.6 or newer (`node --version`).
 
 ## A. Practice mode (no wallet, no network)
 
 ```bash
 npm install
-npm test            # 39 tests should pass
+npm test            # 49 tests should pass
 npm run attack      # the attack suite against the offline chain
 npm run web         # open http://localhost:3000
 ```

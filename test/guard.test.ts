@@ -72,11 +72,12 @@ test('invalid account id is BLOCKed', async () => {
   assert.equal((await checkCounterparty('Bad Address!', deps)).verdict, 'BLOCK');
 });
 
-test('blocked attempts are audited and do not change trust score', async () => {
+test('blocked attempts are audited, with the amount', async () => {
   const { deps } = mk();
   await guardedPay('evil.testnet', nearToYocto('0.5'), 'r1', deps);
   assert.equal(deps.ledger.claims.length, 1);
-  assert.equal(deps.ledger.score('evil.testnet'), 50);
+  assert.equal(deps.ledger.claims[0].amountNear, '0.5');
+  assert.equal(deps.ledger.completedCount('evil.testnet'), 0);
   assert.ok(deps.ledger.verify().ok);
 });
 

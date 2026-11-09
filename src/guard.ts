@@ -50,13 +50,13 @@ export async function guardedPay(
   check.reasons.forEach((r) => deps.log(`   - ${r}`));
 
   if (check.verdict === 'BLOCK') {
-    deps.ledger.append({ subject: recipient, amountUsd: 0, status: 'blocked', ref: reference });
+    deps.ledger.append({ subject: recipient, amountUsd: 0, amountNear: yoctoToNear(amount), status: 'blocked', ref: reference });
     return { status: 'REFUSED_BY_GUARD', check };
   }
   if (check.verdict === 'WARN') {
     const ok = await deps.askHuman(`WARNING for ${label}:\n  ${check.reasons.join('\n  ')}\nProceed?`);
     if (!ok) {
-      deps.ledger.append({ subject: recipient, amountUsd: 0, status: 'blocked', ref: reference });
+      deps.ledger.append({ subject: recipient, amountUsd: 0, amountNear: yoctoToNear(amount), status: 'blocked', ref: reference });
       return { status: 'DECLINED_BY_HUMAN', check };
     }
   }
@@ -69,8 +69,10 @@ export async function guardedPay(
   }
   deps.ledger.append({
     subject: recipient,
-    amountUsd: 0, // amounts here are NEAR, not USD; the ledger field is only used by the USD flow
-    status: outcome.ok ? 'completed' : 'blocked',
+    amountUsd: 0, // legacy field, always 0; the real amount is amountNear
+    amountNear: yoctoToNear(amount),
+    // A transfer that the contract accepted and then could not deliver is a failure, not a refusal.
+    status: outcome.ok ? 'completed' : /^Transfer failed after/.test(outcome.error) ? 'failed' : 'blocked',
     ref: reference,
   });
   if (!outcome.ok) return { status: 'REJECTED_BY_CONTRACT', check, error: outcome.error };
