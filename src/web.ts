@@ -216,6 +216,12 @@ const ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]
     ? [`${process.env.CODESPACE_NAME}-${PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`.toLowerCase()] : [];
   for (const h of [...extra, ...cs]) { HOSTS.add(h); ORIGINS.add(`https://${h}`); }
 }
+/** Inside a Codespace, accept the forwarded address of this same Codespace on any port (the name is unguessable and GitHub signs you in to it). */
+function codespaceOrigin(o: string): boolean {
+  const cn = process.env.CODESPACE_NAME?.toLowerCase(), dom = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN?.toLowerCase();
+  if (!cn || !dom) return false;
+  try { const u = new URL(o.toLowerCase()); return u.protocol === 'https:' && u.hostname.endsWith(`.${dom}`) && u.hostname.startsWith(`${cn}-`); } catch { return false; }
+}
 // Sign-in for the local dashboard. In live mode (or when DASHBOARD_TOKEN is set) the pages that act and the whole API
 // need a secret that only the person at this terminal has: open the link printed at start-up, which sets a session cookie.
 const LOCK = live || !!process.env.DASHBOARD_TOKEN;
@@ -310,7 +316,11 @@ createServer(async (req, res) => {
     // a Host we expect (blocks DNS rebinding) and, when the browser sends one, our own Origin (blocks other websites).
     if (!HOSTS.has(String(req.headers.host ?? '').toLowerCase())) { res.writeHead(421, { 'content-type': 'application/json' }); res.end('{"error":"Unexpected Host header"}'); return; }
     const origin = req.headers.origin;
-    if (origin !== undefined && !ORIGINS.has(String(origin).toLowerCase())) { res.writeHead(403, { 'content-type': 'application/json' }); res.end('{"error":"Cross-site request refused"}'); return; }
+    if (origin !== undefined && !ORIGINS.has(String(origin).toLowerCase()) && !codespaceOrigin(String(origin))) {
+      console.log(`Refused a request from Origin "${origin}" (Host "${req.headers.host}"). If this is your own Codespace page, set ALLOWED_HOSTS to its host name.`);
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: `Cross-site request refused (origin ${origin}). The terminal running npm run web says how to fix it.` })); return;
+    }
     res.setHeader('x-frame-options', 'DENY');
     res.setHeader('content-security-policy', "frame-ancestors 'none'");
     res.setHeader('x-content-type-options', 'nosniff');
