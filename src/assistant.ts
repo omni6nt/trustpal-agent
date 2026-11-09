@@ -90,7 +90,7 @@ export async function geminiAgent(doc: string, apiKey: string, fetchFn: typeof f
       generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 3000, temperature: 0 },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini API returned ${res.status}${res.status === 404 ? ` (model "${model}" not found; set GEMINI_MODEL)` : res.status === 429 ? ' (rate limit or quota)' : ''}`);
+  if (!res.ok) throw new Error(`Gemini API returned ${res.status}${res.status === 404 ? ` (model "${model}" is not available for your key; run: npm run ai-models)` : res.status === 429 ? ' (rate limit or quota)' : ''}`);
   const data: any = await res.json();
   const raw = (data.candidates?.[0]?.content?.parts ?? []).map((b: any) => b.text ?? '').join('');
   return parsePayments(raw);
