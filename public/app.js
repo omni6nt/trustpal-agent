@@ -308,9 +308,9 @@ function bind(r) {
     $('readbtn').onclick = async (e) => {
       const b = e.currentTarget; if (busy) return; busy = true; b.disabled = true; b.textContent = 'Reading';
       try {
-        const res = await api('/api/agent', { method: 'POST', body: $('doc').value }); await refresh();
+        const res = await api('/api/agent', { method: 'POST', body: $('doc').value, signal: AbortSignal.timeout(60000) }); await refresh();
         const acts = res.results.map((x) => S.activity.find((a) => a.id === x.id) || { outcome: 'info' });
-        $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : '<div class="empty">The AI found no payments in this text.</div>';
+        $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : `<div class="empty">${esc(res.note || 'The AI found no payments in this text.')}</div>`;
         for (const a of acts) if (a.id) await railPlay(a);
       } catch (err) { $('invres').innerHTML = `<div class="empty">Something went wrong: ${esc(err.message)}. Check the terminal running npm run web.</div>`; }
       b.disabled = false; b.textContent = 'Read this invoice'; busy = false;
