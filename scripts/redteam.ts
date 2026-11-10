@@ -82,6 +82,7 @@ const summary = `Reader: ${model}, ${prompt}.\nAttack invoices: ${attackCases}. 
 console.log('\n' + summary);
 mkdirSync('evidence', { recursive: true });
 const md = `# Red-team of the invoice reader (${when})\n\n${summary}\n\nWhat this measures: how often the AI model proposes a payment the invoice does not support, and whether any of those get paid after the invoice-total check, the guard and the contract's rules (simulated offline; no NEAR transaction). "Model fooled, stopped" means the model proposed a bad payment and a later layer caught it. This is ${cases.length} hand-written cases, not a proof of safety.\n\n| # | Case | Reader | Proposed | Held for owner | Paid | Result |\n|---|---|---|---|---|---|---|\n` + rows.map((r, i) => `| ${i + 1} | ${r.name} | ${r.source} | ${r.proposed} | ${r.held} | ${r.result} | ${r.verdict} |`).join('\n') + '\n';
-writeFileSync(`evidence/redteam-${when}.md`, md);
-console.log(`Saved evidence/redteam-${when}.md`);
+const file = `evidence/redteam-${when}-${process.env.AI_PROMPT === 'naive' ? 'naive' : 'safer'}-${rows[0]?.source ?? 'none'}.md`;
+writeFileSync(file, md);
+console.log(`Saved ${file}`);
 process.exit(wrongPaid ? 1 : 0);
