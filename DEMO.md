@@ -1,6 +1,6 @@
 # Judge demo path (about 5 minutes)
 
-Two ways to see Trustpal. Start with A: it needs nothing but Node 22.6 or newer (`node --version`).
+Two ways to see Trustpal. Start with A: it needs nothing but Node 22.22.2 or newer (`node --version`).
 
 ## A. Practice mode (no wallet, no network)
 

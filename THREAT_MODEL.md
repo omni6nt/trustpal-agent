@@ -44,6 +44,6 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 - Mainnet risks, stablecoin risks (not built).
 - Failed or expired payments: a failed transfer releases the daily reservation but keeps its invoice reference used, and an expired approval keeps its reference until cancelled. The owner issues a new reference. This is safe but inconvenient.
 - Failed revenue-share transfers: the contract does not record whether each share arrived (no callback). It relies on NEAR returning an undelivered amount to the contract; this was not tested.
-- Measuring how often a real model is fooled (needs a red-team run).
+- A broad measurement of how often a real model is fooled: `npm run redteam` covers 23 hand-written invoices only (results in `evidence/`).
 
 Full detail and evidence: [DEFENCE_NOTE.md](DEFENCE_NOTE.md).

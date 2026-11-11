@@ -51,4 +51,5 @@ async function call(methodName, args, depositYocto = 0n) {
 export const approvePayment = ({ reference, recipient, amountNear, seconds }) =>
   call('approve_payment', { reference, recipient, amount: toYocto(amountNear), valid_for_seconds: Number(seconds) });
 export const cancelApproval = (reference) => call('cancel_approval', { reference });
+export const setPaused = (paused) => call('set_paused', { paused: !!paused });
 export const payBusiness = ({ memo, amountNear }) => call('receive_revenue', { memo: String(memo || 'payment').slice(0, 64) }, BigInt(toYocto(amountNear)));

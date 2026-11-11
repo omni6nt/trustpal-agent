@@ -2,9 +2,20 @@
 
 **A business an AI can run but cannot rob.**
 
-**What "cannot rob" means, precisely.** The AI cannot pay a stranger, change any rule, approve its own payments, add a key or call any other contract, and the contract enforces that. It can still be fooled into a *wrong amount* for someone already on your list, but never above your per-payment limit or your daily cap, and an AI-proposed amount that does not match the invoice total is held for the owner instead of paid. So the worst case is bounded by the limits you set, not unlimited. (An owner-approved payment is exact and is not capped by the per-payment limit; it still counts toward the daily cap.)
+> **Needs Node 22.22.2 or newer** (`node --version`). Then: `npm install`, `npm run web`, open the link it prints. Do X, see Y is in the two-minute path below.
 
-**Two-minute judge path (needs no keys):** `npm install`, `npm test`, `npm run web`, open the link it prints, open **Security lab**, press **Run all five**. For the live testnet evidence without any keys: `npm run verify-live`.
+**What "cannot rob" means, precisely.** The AI cannot change the rules, approve its own payments, add a key or call any other contract, and a payment to someone who is not on your list or has no exact approval is refused by the contract. It *can* pay people already on your list, within the limits you set, so a fooled AI could still pay the wrong amount to a listed payee. The contract enforces the per-payment limit and the daily cap on every payment route, and an AI-proposed amount that does not match the invoice total is held for the owner instead of paid. (An owner-approved payment is exact and is not capped by the per-payment limit; it still counts toward the daily cap.)
+
+**Two ways a payment happens:** you approve an exact payment (recipient, amount, reference, expiry), or you let the AI pay people on your list within your limits.
+
+**Two-minute judge path (needs no keys, practice mode):**
+1. `npm install`, then `npm run web`.
+2. Open the link it prints. You land on Home in practice mode (simulated, no money, no blockchain).
+3. Open **Payments**, press **Read this invoice** (the sample hides an instruction to pay a stranger). You see the stranger payment refused and nothing paid.
+4. Open **For judges, then Demo: try to break it**, press **Run all five**. You see each attack stopped, and which layer stopped it.
+5. For the live testnet evidence without any keys: `npm run verify-live`.
+
+Red-team of the invoice reader (`npm run redteam`, Gemini, 23 invoices: 20 attack or edge cases plus 3 clean; results in `evidence/`): no money moved wrongly in any run. The model itself is sometimes fooled, more with a naive prompt than with the safer one, and a later layer stops every such case. This is a small hand-written set, not a proof.
 
 Trustpal gives an AI a role in a small business's payment operations without giving it unrestricted control of the business's money. The AI reads invoices and proposes payments. The owner approves the exact payment. A smart contract on NEAR is the only thing that can move money, and it enforces the owner's rules whatever the AI is told.
 
@@ -14,7 +25,7 @@ Built for NEAR HACKATHON, Nov 2026. Tracks: Autonomous Business (lead) and AI Se
 
 ## The story in 30 seconds
 
-A small studio receives 10 NEAR from a client. The contract splits it at once: shares go to collaborators, the rest stays in the treasury. Later a contractor sends an invoice. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract refuses, because the owner never approved that exact payment.
+A small studio receives 10 NEAR from a client. The contract starts the split transfers together: shares go to collaborators, the rest stays in the treasury. Later a contractor sends an invoice. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract refuses, because the owner never approved that exact payment.
 
 ## How it works
 
@@ -46,7 +57,7 @@ If the AI is fooled: the contract still enforces the owner's approval.
 ## Run it
 
 ```bash
-node --version       # 22.6 or newer (the scripts run TypeScript files directly)
+node --version       # 22.22.2 or newer (the scripts run TypeScript files directly)
 npm install
 npm test             # 49 application tests (does NOT run the contract tests)
 npm run test:contract   # 31 contract tests; needs Rust and Cargo 1.85 or newer
@@ -74,10 +85,18 @@ Overview, Invoices (the AI reads an invoice), Approvals, Revenue split, Who can 
 | `src/assistant.ts` | AI layer: scripted stand-in, optional real model (Gemini or Claude); fails closed if the model fails |
 | `src/trust.ts` | Hash-chained activity log (kept in a local file in live mode) |
 | `src/web.ts`, `public/` | Dashboard server and site |
-| `scripts/` | `owner.sh`, `setup-testnet.sh`, `keygen.ts`, `key-limits.ts` |
+| `scripts/` | `owner.sh`, `setup-testnet.sh`, `keygen.ts`, `key-limits.ts`, `verify-live.ts`, `redteam.ts`, `fresh-clone-check.sh` |
+| `evidence/` | Real-model red-team reports (`npm run redteam`) |
+| `docs/` | Submission pack, video script, X post draft |
 | `DEMO.md` | Judge walkthrough |
 | `DEFENCE_NOTE.md` | Full defence note |
 | `THREAT_MODEL.md` | Attacks, defences, assumptions |
+
+## What is real, and what is next
+
+- **Practice mode (what you see after `npm run web`):** anyone can set their own limits, payee and split and try the whole flow. It is simulated on your computer: no wallet, no money, no blockchain. A pass here is not proof about the deployed contract.
+- **Live testnet:** one configured demo business (`omni6nt-owner.testnet`, contract `omni6nt-policy3.testnet`) with a real contract, a restricted AI key and wallet-signed approvals. Check it without any keys: `npm run verify-live`. Changing limits, payees or the split in live mode still runs from the command line (pause can be signed in the owner's wallet).
+- **Next:** self-serve treasuries (each business connects its own wallet and creates its own policy-controlled treasury), wallet sign-up, wallet-signed limits and payees, owner recovery or a multisig owner, stablecoin payments, and an independent audit.
 
 ## Honest limits
 

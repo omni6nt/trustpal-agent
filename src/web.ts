@@ -1,6 +1,7 @@
 // Local demo page.  npm run web            (offline mock)
 //                   npm run web -- --live  (NEAR testnet, real transactions)
 // Open http://localhost:3000
+import { restoreActivity } from './restore.ts';
 import { createServer } from 'node:http';
 import { loadEnvFile } from 'node:process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -71,6 +72,7 @@ const LABELS: Record<string, string> = {
   approved: 'Pay the owner-approved invoice', fraud: 'Fraud on an approved invoice', replay: 'Replay a paid invoice', lookalike: 'Look-alike address',
 };
 let actId = 0;
+for (const r of restoreActivity(ledger.claims)) activity.unshift({ id: ++actId, at: r.at, label: r.label, outcome: r.outcome, stoppedAt: null, headline: r.headline, logs: [], to: r.to, amount: r.amount, mode: live ? 'testnet' : 'practice' });
 function record(label: string, headline: string, logs: string[], extra: Partial<Activity> = {}): Activity {
   const a: Activity = { id: ++actId, at: new Date().toISOString(), label, headline, logs, mode: live ? 'testnet' : 'practice', tx: lastTx, ...classify(headline), ...extra };
   lastTx = undefined;
@@ -260,7 +262,7 @@ async function ownerAction(b: any) {
       if (amt <= 0n) throw new Error('Amount must be above zero');
       const r = m.receiveRevenue(amt);
       const lines = r.payouts.map((x) => `${yoctoToNear(x.amount)} NEAR to ${x.account}`);
-      record('Client paid the business', `Client paid ${yoctoToNear(amt)} NEAR. Split at once: ${lines.join(', ')}; ${yoctoToNear(r.retained)} NEAR kept in the treasury.`, [], { outcome: 'paid' } as any);
+      record('Client paid the business', `Client paid ${yoctoToNear(amt)} NEAR. Split started: ${lines.join(', ')}; ${yoctoToNear(r.retained)} NEAR kept in the treasury.`, [], { outcome: 'paid' } as any);
       return { applied: true, payouts: r.payouts.map((x) => ({ account: x.account, amount: yoctoToNear(x.amount) })), retained: yoctoToNear(r.retained) };
     }
     case 'approve': {

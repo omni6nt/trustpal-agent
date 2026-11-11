@@ -101,3 +101,13 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;max-wi
  .journey{padding:24px 18px 20px}
 }
 [hidden]{display:none!important}
+
+.choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:860px;margin:34px auto 0;text-align:left}
+.choice-card{display:flex;flex-direction:column;gap:10px;padding:24px;border-radius:26px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;text-decoration:none;transition:border-color .2s,transform .2s}
+.choice-card:hover,.choice-card:focus-visible{border-color:rgba(255,255,255,.4);transform:translateY(-2px)}
+.choice-card h2{margin:0;font-size:1.35rem}
+.choice-card p{margin:0}
+.choice-card small{opacity:.75;line-height:1.45}
+.choice-card .btn{margin-top:auto;text-align:center;align-self:flex-start}
+.choice-note{text-align:center;margin-top:18px}
+@media (max-width:720px){.choice{grid-template-columns:1fr}.choice-card .btn{width:100%}}

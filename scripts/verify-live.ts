@@ -3,6 +3,8 @@
 //   npm run verify-live -- INV-3004 INV-3002        (check specific payment references)
 // Optional: OWNER_ID=... POLICY_ID=... to point it at another deployment.
 import { JsonRpcProvider } from 'near-api-js';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 const OWNER = process.env.OWNER_ID || 'omni6nt-owner.testnet';
 const POLICY = process.env.POLICY_ID || 'omni6nt-policy3.testnet';
@@ -29,9 +31,13 @@ const agentKeys = ownerKeys.filter((k) => k.access_key?.permission?.FunctionCall
 if (!agentKeys.length) bad(`no function-call key for ${POLICY} found on ${OWNER}`);
 for (const k of agentKeys) {
   const fc = k.access_key.permission.FunctionCall;
-  const only = fc.method_names.length === 1 && fc.method_names[0] === 'pay';
-  console.log(`   ${k.public_key}: can only call ${JSON.stringify(fc.method_names)} on ${fc.receiver_id}  ${only ? 'OK (pay only)' : 'NOT LIMITED TO pay'}`);
-  if (!only) bad('an agent key can call more than pay');
+  const m: string[] = fc.method_names;
+  const only = m.length === 1 && m[0] === 'pay';
+  // Keys that can only call read-only getters (get_*) cannot move money or change rules. Wallet sign-in often leaves these behind.
+  const readOnly = m.length > 0 && m.every((x) => /^get_[a-z_]+$/.test(x));
+  const verdict = only ? 'OK (pay only)' : readOnly ? 'OK (read-only getters, cannot move money; usually left by a wallet sign-in)' : m.length === 0 ? 'ANY METHOD' : 'CAN CALL MORE THAN pay';
+  console.log(`   ${k.public_key}: can only call ${JSON.stringify(m)} on ${fc.receiver_id}  ${verdict}`);
+  if (!only && !readOnly) bad('a key on the owner account can call more than pay');
 }
 const full = ownerKeys.filter((k) => k.access_key?.permission === 'FullAccess').length;
 console.log(`   (${OWNER} also has ${full} full-access key(s): that is the owner's own key.)\n`);
@@ -41,6 +47,24 @@ const pk = await keysOf(POLICY);
 const pfull = pk.filter((k) => k.access_key?.permission === 'FullAccess');
 if (pfull.length === 0) console.log('   FROZEN: the policy account has no full-access key, so its code cannot be changed.\n');
 else { console.log(`   NOT FROZEN: ${pfull.length} full-access key(s) can still redeploy the contract. This is a prototype risk; see THREAT_MODEL.md.\n`); }
+
+console.log('3b. Is the deployed code the code in this repository?');
+try {
+  const acct = await (provider as any).query({ request_type: 'view_account', finality: 'final', account_id: POLICY });
+  const code = await (provider as any).query({ request_type: 'view_code', finality: 'final', account_id: POLICY });
+  const onchain = createHash('sha256').update(Buffer.from(code.code_base64, 'base64')).digest('hex');
+  console.log(`   on-chain code hash (NEAR): ${acct.code_hash}`);
+  console.log(`   on-chain code sha256 (hex): ${onchain}`);
+  const wasmPath = process.env.WASM_PATH || 'contract/target/near/trustpal_policy.wasm';
+  if (existsSync(wasmPath)) {
+    const local = createHash('sha256').update(readFileSync(wasmPath)).digest('hex');
+    console.log(`   local build ${wasmPath}: ${local}`);
+    console.log(local === onchain ? '   MATCH: the deployed bytecode is identical to this local build.' : '   DIFFERENT: the deployed bytecode is not this local build (a different build or toolchain gives different bytes).');
+    console.log('   A match proves the bytes are the same. It does not prove the contract is secure or correctly configured.\n');
+  } else {
+    console.log(`   No local build found at ${wasmPath}. To compare: cd contract && cargo near build non-reproducible-wasm, then re-run. Record the source commit, toolchain and both hashes.\n`);
+  }
+} catch (e) { console.log(`   Could not read the deployed code (${(e as Error).message}). Treat as INCONCLUSIVE.\n`); }
 
 console.log('4. Recorded payments');
 for (const r of refs) {

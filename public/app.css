@@ -311,3 +311,23 @@ label{display:grid;gap:7px;font-weight:600;font-size:var(--fs-sm);color:var(--c4
 .steps b{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--c2);color:#fff;font-size:12px}
 .steps li.done b{background:#0f3a33;color:var(--ok)}.steps li.done a{color:var(--c4);text-decoration:line-through}
 .steps a{color:#fff;font-weight:650;text-decoration:none}.steps a:hover{text-decoration:underline}
+
+/* v19: desktop nav groups (More, For judges) */
+.dgbtn{display:none}
+@media (min-width:901px){
+  .dgbtn{display:block}
+  .dgb{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:10px 16px;border:0;border-radius:99px;background:none;color:var(--c3);font:600 13px/1 inherit;cursor:pointer;text-align:left}
+  .dgb:hover{color:#fff}
+  .dgb span{transition:transform .2s}.dgb[aria-expanded=true] span{transform:rotate(180deg)}
+  .nav li.gm,.nav li.gj{display:none}
+  #navlist.show-more li.gm,#navlist.show-judge li.gj{display:block}
+}
+.pausebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 16px;border-radius:99px;border:1px solid var(--c2);font-size:var(--fs-sm,14px)}
+.pausebar.paused{border-color:var(--bad);background:rgba(220,60,60,.1)}
+.pausebar b{flex:1 1 auto}
+.pausebar button{min-height:44px;padding:0 16px;border-radius:99px;border:1px solid var(--bad);background:none;color:var(--bad);font-weight:700;cursor:pointer}
+.pausebar.paused button{border-color:var(--c4);color:#fff}
+.heldcard{border:1px solid #c9a227;border-radius:20px;padding:18px 20px;margin:14px 0}
+.heldcard h3{margin:0 0 6px}.heldcard dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:10px 0}.heldcard dt{color:var(--c3)}.heldcard dd{margin:0;word-break:break-all}
+.wiz{max-width:560px}.wiz label{display:block;margin:12px 0}.wiz input{width:100%}
+.wiz .steps-dots{display:flex;gap:6px;margin-bottom:14px}.wiz .steps-dots i{width:28px;height:4px;border-radius:2px;background:var(--c2)}.wiz .steps-dots i.on{background:var(--c5,#fff)}

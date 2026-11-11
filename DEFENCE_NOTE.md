@@ -1,6 +1,6 @@
 # Trustpal Defence Note
 
-Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR is the only thing that can move money. "Cannot rob" is precise: the AI cannot pay a stranger or change any rule, and the most it can lose is bounded by the owner's per-payment limit and daily cap. It can still be fooled into a wrong amount for someone already on the list, within those limits; AI-proposed amounts that do not match the invoice total are held for the owner.
+Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR is the only thing that can move money. "Cannot rob" is precise: the AI cannot change any rule or approve its own payments, and a payment to someone who is not on the list and has no exact approval is refused by the contract. It can still be fooled into a wrong amount for someone already on the list; the contract enforces the per-payment limit and daily cap on every route, and AI-proposed amounts that do not match the invoice total are held for the owner.
 
 ## Judge demo path (5 minutes)
 
@@ -66,7 +66,7 @@ These are the values only the owner sets. The contract enforces them and the AI 
 | New-payee wait | A newly added payee cannot be paid until a delay has passed | Set to 120 seconds on the testnet deployment. It applies to standing payees, not to an exact owner approval |
 | Exact-payment approval | Reference, recipient, amount and expiry, approved by the owner | Single use. Valid for up to 30 days. Can be cancelled |
 | Revenue split | When a client pays the business, shares go to named accounts automatically | Up to 10 shares, in basis points, total at most 100%. What is not handed out, plus any rounding remainder, stays in the treasury. The contract does not record whether each share arrived; it relies on NEAR returning an undelivered share to the contract, which was not tested |
-| Pause | Stops all outgoing payments at once (client money can still arrive) | Owner only |
+| Pause | Blocks every new outgoing payment (client money can still arrive) | Owner only |
 | Withdraw | The owner can take money out | Cannot touch money already reserved for pending payments |
 | One-time references | Every invoice reference can be paid once | Stops replay |
 
@@ -146,7 +146,7 @@ A defence note that hides its weak points is not a defence. These are the real o
 - **The guard can degrade.** If the network lookup of an account fails, the guard warns instead of blocking. The contract is unaffected.
 - **The local dashboard server holds the agent key in live mode.** It now refuses requests from other websites (Host and Origin checks), but anyone with access to the machine can use it. The agent key can still only call `pay`.
 - **The default AI is scripted.** With a model key, invoice text leaves the machine for the model provider (Google or Anthropic), so only test invoices should be used. If the owner key is lost there is no recovery: the contract has no owner-change function.
-- **The AI is scripted by default.** The attack results show the defences work against a gullible AI. They do not measure how often a real model is fooled. That needs a red-team run with a real model and an API key.
+- **The AI is scripted by default.** The Security lab attacks use a gullible scripted AI unless a key is set. A separate red-team run (`npm run redteam`, real Gemini model, results in `evidence/`) measures how often a real model is fooled; it is a small hand-written set of 23 invoices, so it is a measurement, not a proof. The model is a language model and may still be fooled in ways the set does not cover; that is a threat-model assumption, which is why the money layer does not trust it.
 - **The gate animation is a replay.** The dashboard plays the real result after it returns. It places the stop at the gate whose rule failed, but the contract performs all of those checks in one call.
 - **The agent key's gas allowance runs out.** It is small by design and must be topped up by the owner.
 - **Built with AI assistance.** The code was written with help from Claude. The deployment and every live test were run and checked by the team on testnet.
@@ -179,13 +179,13 @@ A scan of other entries, gathered by the team and not independently verified, sh
 | Does the dashboard control real funds? | No owner key is ever on the page. In practice mode it runs on a simulation. In live mode it reads the testnet contract, sends payments with the restricted agent key (which can only call `pay`), and owner changes are signed in a wallet or run in the owner's terminal. |
 | Does it use NEAR Intents? | No. An earlier cross-border remittance prototype that used it was removed from this repo. |
 | Did AI write the code? | Yes, with Claude's help. The team deployed it, ran every live test and checked the results. |
-| What would you build next? | Wallet-signed versions of the remaining owner actions (limits, payees, split, pause), email login, stablecoin payments, a multisig owner, an outside audit, and a red-team run with a real model to measure how often it is fooled. |
+| What would you build next? | Wallet-signed versions of the remaining owner actions (limits, payees, split, pause), email login, stablecoin payments, a multisig owner, an outside audit and a larger, independent red-team of the invoice reader. |
 
 ## How to check every claim yourself
 
 ```bash
 npm install
-npm test            # 49 application tests (Node 22.6+)
+npm test            # 49 application tests (Node 22.22.2+)
 npm run test:contract   # 31 contract tests (Rust/Cargo 1.85+)
 npm run attack      # the attack suite against the offline chain
 npm run web         # dashboard in practice mode at http://localhost:3000

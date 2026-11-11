@@ -4,6 +4,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let S = null, busy = false, route = 'overview', lastBal = null;
+const wiz = { step: 0, max: '', cap: '', payee: '', partner: '', pct: '20', err: '' };
+const wizDone = () => { try { return localStorage.getItem('tp_wiz') === '1'; } catch { return false; } };
+const wizMark = () => { try { localStorage.setItem('tp_wiz', '1'); } catch {} };
 const ACCOUNT = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
 
 /* ================= authority stack ================= */
@@ -94,7 +97,7 @@ const PALETTE = ['#CCD0CF', '#9BA8AB', '#6F8391', '#4A5C6A'];
 const segColor = (i) => PALETTE[i % PALETTE.length];
 const segText = (c) => (c === '#CCD0CF' || c === '#9BA8AB' ? '#06141B' : '#E6EAE9');
 function splitParts() { const p = S.split.map((x, i) => ({ who: x.who, pct: x.pct, c: segColor(i) })); p.push({ who: 'Kept in the treasury', pct: S.treasuryPct, c: '#4CC2A1' }); return p.filter((x) => x.pct > 0); }
-const modeTag = (a) => `<span class="tag info" style="margin-left:6px">${a.mode === 'testnet' ? 'Ran on testnet' : 'Practice run'}</span>`;
+const modeTag = (a) => `<span class="tag info" style="margin-left:6px">${/^Earlier session/.test(a.label || '') ? 'From the local log: the chain is the record' : a.mode === 'testnet' ? (a.tx ? 'Confirmed on testnet' : 'Ran on testnet') : 'Practice run: simulated'}</span>`;
 const txLink = (a) => (a.tx ? ` <a href="https://testnet.nearblocks.io/txns/${esc(a.tx)}" target="_blank" rel="noopener" style="color:var(--c5)">View transaction</a>` : '');
 const feedItem = (a, full) => { const [c, l] = tagFor(a.outcome); return `<li class="${c}"><span><b>${esc(a.label)}</b> <span class="tag ${c}" style="margin-left:6px">${l}</span>${modeTag(a)}</span><time>${when(a.at)}</time><span class="why">${esc(a.headline)}${txLink(a)}${full && a.logs.length ? `<details><summary>What happened, step by step</summary><ul>${a.logs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}</span></li>`; };
 
@@ -133,17 +136,18 @@ const screens = {
     const stage = (n, label, sub, on) => `<div class="stg ${on ? 'on' : ''}"><b class="num">${n}</b><span>${label}</span><small>${sub}</small></div>`;
     const setup = [
       [S.network !== 'testnet' || !!walletAcct, S.network === 'testnet' ? 'Connect your wallet' : 'Practice mode needs no wallet', S.network === 'testnet' ? '#approvals' : '#overview'],
-      [(S.recipients || []).length > 0, 'Check your rules and the people you pay', '#owner'],
+      [(S.recipients || []).length > 0, 'Set your rules and the people you pay', S.canEdit ? '#setup' : '#owner'],
       [S.activity.some((x) => x.label === 'Invoice read by the AI'), 'Read your first invoice', '#invoices'],
     ];
     const todo = setup.filter((x) => !x[0]).length;
     const first = todo ? `<section class="slab in setup"><h2>Set up in three steps</h2><ul class="steps">${setup.map((x, i) => `<li class="${x[0] ? 'done' : ''}"><b>${x[0] ? '✓' : i + 1}</b><a href="${x[2]}">${esc(x[1])}</a></li>`).join('')}</ul></section>` : '';
-    return `<h1 class="in">An AI runs your payments. It can't rob you.</h1>
-    <p class="lede in">The AI reads invoices and proposes payments. It never holds your money or your main key. Whatever it is tricked into, the contract lets no more than your daily limit leave in a day, and the AI cannot approve payments or change your rules.</p>
+    return `<h1 class="in">An AI helps run your payments. Your rules stay in charge.</h1>
+    <p class="lede in">The AI reads invoices and proposes payments. It never holds your money or your main key. Whatever it is tricked into, the contract enforces your per-payment and daily limits, and the AI cannot approve payments or change your rules.</p>
     ${first}
     <section class="attention-card in"><div class="attention-copy"><span class="eyebrow">${need ? 'Needs you' : 'All clear'}</span><h2>${need ? `${need} payment${need === 1 ? '' : 's'} need${need === 1 ? 's' : ''} your attention` : 'Nothing needs your decision right now'}</h2><p>${need ? 'Nothing moves until you approve it.' : 'People on your list are paid within your limits when an invoice matches. Everything else waits for you.'}</p></div><div class="attention-actions"><a class="btn" href="#invoices">Read an invoice</a><a class="btn ghost" href="#approvals">Approvals</a></div></section>
     <section class="slab in stages" aria-label="Where payments are"><h2>Where your payments are</h2><p class="sub" style="margin:-8px 0 16px">Only the last stage moves money.</p><div class="stgrow">${stage(ai.length, 'Proposed by AI', 'not trusted until checked', ai.length)}<i></i>${stage(waiting, 'Waiting for you', 'nothing moves yet', waiting)}<i></i>${stage(open, 'Approved by you', 'locked on the blockchain', open)}<i></i>${stage(executed, 'Executed', 'confirmed by the contract', executed)}</div></section>
-    <section class="slab in story"><h2>A day at a small studio</h2><p>A client pays the studio 10 NEAR. The contract splits it at once: shares go to the collaborators, the rest stays in the treasury. Later a contractor's invoice arrives. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract still refuses, because the owner never approved that exact payment.</p></section>
+    <details class="slab in story"><summary><b>A day at a small studio</b></summary><p style="margin-top:10px">A client pays the studio 10 NEAR. The contract starts the split: shares go to the collaborators, the rest stays in the treasury. Later a contractor's invoice arrives. The AI reads it and prepares the payment, but a poisoned copy of the invoice swaps in a different wallet. The guard flags it. And even if the AI were fooled, the contract still refuses, because the owner never approved that exact payment.</p></details>
+    <section class="slab in"><h2>Who controls what</h2><ul class="cc">${liI('You: approve exact payments, change the rules, pause everything', true)}${liI('The AI: propose payments, and pay people on your list within your limits', true)}${liI('The contract: checks every payment against your rules, whatever the AI is told', true)}${liI('The AI cannot change the rules, approve its own exceptions or call anything but pay', false)}</ul><details class="advanced-details"><summary>Advanced: keys and the contract</summary><p class="sub">Owner account: <code>${esc(S.owner)}</code>. Policy contract: <code>${esc(S.contract)}</code>. The AI holds a function-call key limited to <code>pay</code>. Until the contract account is frozen, its own full-access key could still redeploy the contract: that is a prototype risk, see THREAT_MODEL.md. If the owner key is lost there is no recovery yet.</p></details></section>
     <section class="slab hero in"><div><div class="label">Contract balance</div><div class="bal num"><span id="bal">0</span><small>NEAR</small></div>
       <p class="sub">${fmt(S.revenue)} NEAR received from clients. ${fmt(S.pending)} NEAR on its way out.</p></div>
       <div class="ring" title="Daily limit"><svg viewBox="0 0 168 168"><circle class="t" cx="84" cy="84" r="72"/><circle class="p" id="ringp" cx="84" cy="84" r="72" style="--len:452.4"/></svg><div class="mid"><b class="num">${fmt(S.remainingToday, 2)}</b><span>left today</span></div></div></section>
@@ -209,11 +213,11 @@ const screens = {
     const to = S.walletContract || S.contract;
     const link = `${location.origin}/pay.html?to=${encodeURIComponent(to)}`;
     return `<h1 class="in">Get paid</h1>
-    <p class="lede in">This is where your clients send money. It goes into your treasury, and your revenue split shares it out at once.</p>
+    <p class="lede in">This is where your clients send money. It goes into your treasury, and your revenue split starts sharing it out.</p>
     <section class="slab in"><h2>Your payment address</h2><p class="sub" style="margin-bottom:14px">Your treasury is a contract on the NEAR test network.</p>${cmdBox('payaddr', to)}</section>
     <section class="slab in"><h2>Your payment link</h2><p class="sub" style="margin-bottom:14px">Send this to a client. They open it, connect their wallet and pay. The split happens automatically.</p>${cmdBox('paylink', link)}
       <div class="row" style="margin-top:14px"><a class="btn" href="${esc(link)}" target="_blank" rel="noopener" style="text-decoration:none">Open the payment page</a></div></section>
-    <section class="slab in"><h2>What happens when a client pays</h2><ul class="cc">${liI('The client pays through the link and confirms in their own wallet', true)}${liI('The contract splits the money by your revenue split in the same moment', true)}${liI('Whatever you do not hand out stays in your treasury', true)}${liI('A plain transfer to the address above lands in the treasury but is not split. Use the link.', false)}</ul></section>`;
+    <section class="slab in"><h2>What happens when a client pays</h2><ul class="cc">${liI('The client pays through the link and confirms in their own wallet', true)}${liI('The contract starts your revenue split right away (each share is sent, delivery is not individually confirmed)', true)}${liI('Whatever you do not hand out stays in your treasury', true)}${liI('A plain transfer to the address above lands in the treasury but is not split. Use the link.', false)}</ul></section>`;
   },
   agent() {
     const src = /^(Claude|Gemini)/.test(S.ai || '') ? (S.ai || '').replace(' (real model)', '') + ', a real AI model' : 'A scripted stand-in (no API key set)';
@@ -234,6 +238,29 @@ const screens = {
     <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded by this app</span></p>
     <section class="slab in" style="margin-top:20px">${S.activity.length ? `<ul class="tl">${S.activity.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">No activity yet.</div>'}</section>`;
   },
+  setup() {
+    const w = wiz, dots = `<div class="steps-dots" aria-hidden="true">${[0, 1, 2, 3, 4].map((i) => `<i class="${i <= w.step ? 'on' : ''}"></i>`).join('')}</div>`;
+    const err = w.err ? `<p class="note bad" role="alert">${esc(w.err)}</p>` : '';
+    const body = [
+      `<h1 class="in">Let's protect your business payments</h1><p class="lede in">Trustpal lets an AI help with invoices while you keep control of your money. Set your own rules in a minute. This is practice mode: nothing here is real money.</p><div class="row"><button class="btn" id="wnext">Set up my business</button><a class="btn ghost" href="#overview" id="wskip">Skip for now</a></div>`,
+      `<h1 class="in">Your spending rules</h1><p class="lede in">What is the most you would want paid at once, and the most your business can spend in one day?</p>
+       <label>Most paid at once (NEAR)<input id="wmax" inputmode="decimal" value="${esc(w.max)}"></label><label>Most spent in a day (NEAR)<input id="wcap" inputmode="decimal" value="${esc(w.cap)}"></label>${err}
+       <p class="sub">The contract enforces these two numbers on every payment, whatever the AI is told. A payment you approve yourself, for an exact amount, is the one exception to the first number. It still counts toward the daily one.</p>
+       <div class="row"><button class="btn" id="wnext">Continue</button><button class="btn ghost" id="wback">Back</button></div>`,
+      `<h1 class="in">People you trust</h1><p class="lede in">Who do you pay regularly? Payments to someone on your list can follow your rules. Anyone else waits for you.</p>
+       <label>NEAR account<input id="wpayee" placeholder="name.testnet" value="${esc(w.payee)}" autocapitalize="off" autocomplete="off"></label>${err}
+       <p class="sub">Already on your list: ${(S.recipients || []).map((x) => `<code>${esc(x)}</code>`).join(', ') || 'nobody yet'}. You can add more later in Settings.</p>
+       <div class="row"><button class="btn" id="wnext">Continue</button><button class="btn ghost" id="wskipstep">Skip this step</button><button class="btn ghost" id="wback">Back</button></div>`,
+      `<h1 class="in">Money you receive</h1><p class="lede in">When a client pays, how should the money be shared? Whatever you do not hand out stays in your treasury.</p>
+       <label>Partner account (optional)<input id="wpartner" placeholder="partner.testnet" value="${esc(w.partner)}" autocapitalize="off" autocomplete="off"></label><label>Partner's share (percent)<input id="wpct" inputmode="decimal" value="${esc(w.pct)}"></label>${err}
+       <p class="sub">The business keeps the rest. Leave the account empty to keep the split as it is.</p>
+       <div class="row"><button class="btn" id="wnext">Finish</button><button class="btn ghost" id="wskipstep">Skip this step</button><button class="btn ghost" id="wback">Back</button></div>`,
+      `<h1 class="in">You're protected</h1><p class="lede in">Here is what is in force now.</p>
+       <ul class="cc">${liI(`Most paid at once: ${S.maxPerPayment} NEAR`, true)}${liI(`Most spent in a day: ${S.dailyCap} NEAR`, true)}${liI(`${(S.recipients || []).length} trusted payee${(S.recipients || []).length === 1 ? '' : 's'} on your list`, true)}${liI('You can pause all payments from the bar at the top, any time', true)}${liI('The AI can propose payments. It cannot change these rules or approve its own exceptions.', true)}</ul>
+       <div class="row"><a class="btn" href="#invoices" id="wdone">Read your first invoice</a></div>`,
+    ][w.step];
+    return `<section class="slab in wiz">${dots}${body}</section>`;
+  },
   security() {
     const A = [
       ['invoice', 'Poisoned invoice', 'An invoice hides an instruction telling the AI to pay a stranger. The guard should refuse.'],
@@ -249,6 +276,7 @@ const screens = {
     const keys = ['Send NEAR out of the account', 'Add a new key to the account', 'Pause or unpause the contract', 'Create its own approval', 'Change the revenue split', 'Call any other contract'];
     return `<h1 class="in">Security lab</h1>
     <p class="lede in">Try to rob the business. Each run travels along the path of four checks and stops where it is caught.</p>
+    <p class="sub in" style="margin:-6px 0 14px"><b>Invoice reader in use: ${esc(S.ai || 'unknown')}.</b> ${S.network === 'testnet' ? 'These runs use the real contract on NEAR testnet.' : 'Practice mode simulates the contract rules offline, so a pass here is not proof about the deployed contract. Live evidence: <code>npm run verify-live</code>.'}</p>
     <section class="slab in"><div class="sechead" style="margin-bottom:4px"><h2>Attacks</h2><button class="btn ghost sm" id="runall">Run all five</button></div>${A.map(row).join('')}</section>
     <section class="slab in"><h2 style="margin-bottom:4px">Normal payments</h2>
       <p class="sub" style="margin:6px 0 10px">Which approved invoice should "Pay the approved invoice" and "Fraud" use? ${S.approvals.length ? `<select id="apref" style="margin-left:6px">${S.approvals.map((a) => `<option value="${esc(a.ref)}">${esc(a.ref)}: ${esc(a.amount)} NEAR to ${esc(a.to)}</option>`).join('')}</select>` : '<b>None open. Approve one on the Approvals screen first.</b>'}</p>${N.map(row).join('')}</section>
@@ -327,7 +355,7 @@ function bind(r) {
       try {
         const res = await api('/api/agent', { method: 'POST', body: $('doc').value, signal: AbortSignal.timeout(60000) }); await refresh();
         const acts = res.results.map((x) => S.activity.find((a) => a.id === x.id) || { outcome: 'info' });
-        $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : `<div class="empty">${esc(res.note || 'The AI found no payments in this text.')}</div>`;
+        $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); if (/^HELD/.test(a.headline || '')) return `<div class="heldcard" role="group" aria-label="Payment held for you"><h3>Held for you: this payment needs your decision</h3><p>The AI proposed a payment that Trustpal will not make on its own. <b>Nothing was paid.</b> It is either to someone not on your list, or its amount does not match the invoice total.</p><dl><dt>Pay to</dt><dd>${esc(x.to)}</dd><dt>Amount</dt><dd>${fmt(x.amount)} NEAR</dd></dl><p class="sub">If you still want it, approve this exact payment. Otherwise ignore it.</p><div class="row"><a class="btn" href="#approvals">Review in Approvals</a></div></div>`; return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : `<div class="empty">${esc(res.note || 'The AI found no payments in this text.')}</div>`;
         for (const a of acts) if (a.id) await railPlay(a);
       } catch (err) { $('invres').innerHTML = `<div class="empty">Something went wrong: ${esc(err.message)}. Check the terminal running npm run web.</div>`; }
       b.disabled = false; b.textContent = 'Read this invoice'; busy = false;
@@ -355,6 +383,39 @@ function bind(r) {
     const pc = () => { $('pcmd').textContent = cmdLine(S.paused ? 'unpause' : 'pause'); }; pc();
     $('pause').onclick = async () => { const next = !S.paused; try { if (await ownerDo({ action: 'pause', paused: next }, cmdLine(next ? 'pause' : 'unpause'), next ? 'Payments paused' : 'Payments resumed')) rerender(); } catch (e) { toast(e.message); } };
   }
+  if (r === 'setup') {
+    const go = (n) => { wiz.step = n; wiz.err = ''; rerender(); };
+    const fail = (m) => { wiz.err = m; rerender(); };
+    if ($('wskip')) $('wskip').onclick = () => wizMark();
+    if ($('wdone')) $('wdone').onclick = () => wizMark();
+    if ($('wback')) $('wback').onclick = () => go(wiz.step - 1);
+    if ($('wskipstep')) $('wskipstep').onclick = () => go(wiz.step + 1);
+    if ($('wnext')) $('wnext').onclick = async () => {
+      try {
+        if (wiz.step === 0) { wiz.max = S.maxPerPayment; wiz.cap = S.dailyCap; return go(1); }
+        if (wiz.step === 1) {
+          wiz.max = $('wmax').value.trim(); wiz.cap = $('wcap').value.trim();
+          if (!num(wiz.max) || !num(wiz.cap) || Number(wiz.max) <= 0) return fail('Enter both amounts as numbers above zero, like 2 and 5.');
+          if (Number(wiz.cap) < Number(wiz.max)) return fail('The daily limit cannot be smaller than the most paid at once.');
+          await api('/api/owner', { method: 'POST', body: JSON.stringify({ action: 'limits', max: wiz.max, cap: wiz.cap }) }); await refresh(); return go(2);
+        }
+        if (wiz.step === 2) {
+          wiz.payee = $('wpayee').value.trim();
+          if (wiz.payee) await api('/api/owner', { method: 'POST', body: JSON.stringify({ action: 'recipient-add', account: wiz.payee }) });
+          await refresh(); return go(3);
+        }
+        if (wiz.step === 3) {
+          wiz.partner = $('wpartner').value.trim(); wiz.pct = $('wpct').value.trim();
+          if (wiz.partner) {
+            const pct = Number(wiz.pct);
+            if (!(pct > 0 && pct < 100)) return fail('Enter a share above 0 and below 100.');
+            await api('/api/owner', { method: 'POST', body: JSON.stringify({ action: 'split', shares: [{ account: wiz.partner, bps: Math.round(pct * 100) }] }) });
+          }
+          await refresh(); wizMark(); return go(4);
+        }
+      } catch (e) { fail(e.message); }
+    };
+  }
   if (r === 'security') {
     const lock = (v) => document.querySelectorAll('[data-s],#runall').forEach((x) => (x.disabled = v));
     const runOne = async (k) => { const out = $('out-' + k); out.textContent = 'Running'; out.className = 'out'; const a = await api('/api/run?s=' + k + ($('apref') ? '&ref=' + encodeURIComponent($('apref').value) : ''), { method: 'POST' }); await railPlay(a); out.className = 'out ' + (a.outcome === 'stopped' ? 'bad' : a.outcome === 'paid' ? 'good' : ''); out.textContent = a.headline; };
@@ -367,7 +428,13 @@ function bind(r) {
 const sheet = $('sheet'), moreBtn = $('morebtn');
 moreBtn.onclick = (e) => { e.stopPropagation(); sheet.classList.toggle('open'); };
 addEventListener('click', (e) => { if (!sheet.contains(e.target)) sheet.classList.remove('open'); });
+const GM = ['getpaid', 'agent', 'revenue', 'owner'], GJ = ['authority', 'security'];
+function setGroup(id, cls, open) { $('navlist').classList.toggle(cls, open); $(id).setAttribute('aria-expanded', String(open)); }
+$('dmore').onclick = () => setGroup('dmore', 'show-more', !$('navlist').classList.contains('show-more'));
+$('djudge').onclick = () => setGroup('djudge', 'show-judge', !$('navlist').classList.contains('show-judge'));
 function placeNav() {
+  if (GM.includes(route)) setGroup('dmore', 'show-more', true);
+  if (GJ.includes(route)) setGroup('djudge', 'show-judge', true);
   moreBtn.classList.toggle('on', ['getpaid', 'agent', 'authority', 'revenue', 'activity', 'security'].includes(route));
   const a = document.querySelector('.nav a.on'), hl = $('navhl'); if (!a) return;
   hl.style.transform = `translateY(${a.parentElement.offsetTop}px)`; hl.style.opacity = 1;
@@ -384,12 +451,34 @@ function exportCsv() {
 let walletAcct = null, walletErr = '', walletBusy = false;
 const isOwnerAcct = () => walletAcct && S.walletOwner && walletAcct === S.walletOwner;
 const explorerTx = (h) => `https://testnet.nearblocks.io/txns/${h}`;
+function pauseHtml(live) {
+  const p = !!S.paused;
+  return `<div class="pausebar ${p ? 'paused' : ''}" role="status"><b>${p ? 'Payments are paused. Nothing new can be paid until you resume.' : 'Payments are running.'}</b><button id="pausebtn" type="button">${p ? 'Resume payments' : 'Pause payments'}</button></div>`;
+}
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest || !e.target.closest('#pausebtn')) return;
+  const next = !S.paused;
+  if (!confirm(next ? 'Pause payments? New payments will be blocked until you resume them.' : 'Resume payments?')) return;
+  try {
+    if (S.network === 'testnet') {
+      // Live: sign in the owner's wallet. Anything else falls back to the terminal command.
+      if (window.TrustpalWallet && walletAcct && isOwnerAcct() && !walletErr) {
+        const r = await TrustpalWallet.setPaused(next); if (r.hash) lastWalletTx = r.hash;
+        await refresh(); toast(S.paused === next ? (next ? 'Payments paused on testnet' : 'Payments resumed on testnet') : 'The wallet returned, but the contract does not show the change yet. Check the Activity page.');
+        refreshChrome(); if (route === 'owner' || route === 'overview') rerender(); return;
+      }
+      await ownerDo({ action: 'pause', paused: next }, cmdLine(next ? 'pause' : 'unpause'), next ? 'Payments paused' : 'Payments resumed');
+      toast('Connect the owner wallet to pause from here. The terminal command was copied instead.'); return;
+    }
+    if (await ownerDo({ action: 'pause', paused: next }, cmdLine(next ? 'pause' : 'unpause'), next ? 'Payments paused' : 'Payments resumed')) { refreshChrome(); if (route === 'owner' || route === 'overview') rerender(); }
+  } catch (err) { toast(friendlyWalletError(err.message)); }
+});
 function ribbonHtml() {
   const live = S.network === 'testnet';
   const chip = walletAcct
     ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'View only'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
     : `<button class="wchip" id="wconn"><i></i>Connect wallet</button>`;
-  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live on NEAR testnet' : 'Practice mode'}</b><span>${live ? 'Test money only. You approve payments in your wallet.' : 'A simulation on your computer. Nothing here touches the network.'}</span>${chip}</div>`;
+  return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live testnet: configured demo business' : 'Practice mode: no money, no blockchain'}</b><span>${live ? 'Test money only. You approve payments in your wallet.' : 'Rules are simulated on your computer.'}</span>${chip}</div>${pauseHtml(live)}`;
 }
 function bindWallet() {
   const c = $('wconn'), o = $('wout');
@@ -409,7 +498,7 @@ async function walletInit() {
   } catch (e) { walletErr = 'Wallet could not start: ' + e.message; }
 }
 let lastWalletTx = '';
-function refreshChrome() { const rb = document.querySelector('.ribbon'); if (rb) { rb.outerHTML = ribbonHtml(); bindWallet(); } if (route === 'approvals') rerender(); }
+function refreshChrome() { document.querySelectorAll('.pausebar').forEach((x) => x.remove()); const rb = document.querySelector('.ribbon'); if (rb) { rb.outerHTML = ribbonHtml(); bindWallet(); } if (route === 'approvals') rerender(); }
 function walletApproveBlock() {
   if (S.network !== 'testnet') return `<p class="sub">Approving with a wallet works in live mode, where the dashboard reads your real contract on the NEAR test network. In practice mode, use the simulated approval below. See DEMO.md to start live mode.</p>`;
   if (walletErr) return `<p class="note bad">${esc(walletErr)}</p>`;
@@ -455,6 +544,8 @@ async function show() {
   document.body.dataset.route = route;
   document.querySelectorAll('[data-r]').forEach((a) => a.classList.toggle('on', a.dataset.r === route)); placeNav();
   try { await refresh(); } catch { $('main').innerHTML = '<div class="empty">Can\'t reach the Trustpal server. Is <code>npm run web</code> still running?</div>'; return; }
+  if (route === 'setup' && !S.canEdit) { location.hash = '#overview'; return; }
+  if (route === 'overview' && S.canEdit && !wizDone()) { location.hash = '#setup'; return; }
   document.body.dataset.route = route; layoutRail();
   const m = $('main'); m.classList.remove('still'); m.innerHTML = screens[route]();
   m.insertAdjacentHTML('afterbegin', ribbonHtml());
