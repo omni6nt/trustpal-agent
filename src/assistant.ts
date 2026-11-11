@@ -138,9 +138,19 @@ export interface Held { to: string; amountNear: string; reason: string }
  * held for the owner (who can approve the exact payment). This stops a hallucinated or injected amount
  * from being paid automatically to a payee who is already on the list.
  */
+/** How an invoice states its total, in plain wording: "Total: 0.5 NEAR", "Amount due 0.5 NEAR", "Total due: 0.5 NEAR", "Balance due 0.5 NEAR". A subtotal does not count. */
+const TOTAL_RE = /\b(?:grand\s+total|total\s+due|total\s+amount|amount\s+due|balance\s+due|amount\s+payable|total)\s*(?:is|of)?\s*[:\-]?\s*(\d*\.?\d+)\s*(?:NEAR|Ⓝ)/gi;
+
+/** Accounts an invoice names that nothing was proposed for. Shown to the owner so a hidden instruction is never silent. */
+export function otherAccounts(doc: string, proposedTo: string[]): string[] {
+  const seen = new Set(proposedTo.map((x) => x.toLowerCase()));
+  const found = [...doc.toLowerCase().matchAll(/\b[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]+)*\.(?:testnet|near)\b/g)].map((x) => x[0]);
+  return [...new Set(found)].filter((a) => !seen.has(a)).slice(0, 5);
+}
+
 export function reconcile(doc: string, proposals: Proposed[]): { ok: Proposed[]; held: Held[] } {
   // Every "Total: X NEAR" in the document. Exactly one distinct value is needed; two different totals is ambiguous.
-  const totals = [...new Set([...doc.matchAll(/\bTotal:\s*([\d.]+)\s*NEAR/gi)].map((x) => x[1]))];
+  const totals = [...new Set([...doc.matchAll(TOTAL_RE)].map((x) => x[1]))];
   const m = totals.length === 1 ? [totals[0], totals[0]] : null;
   const ok: Proposed[] = [];
   const held: Held[] = [];

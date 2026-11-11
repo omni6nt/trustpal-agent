@@ -10,7 +10,7 @@ import { extname, join, normalize } from 'node:path';
 import { MockChain, NearChain, nearToYocto, yoctoToNear, type Chain } from './chain.ts';
 import { guardedPay } from './guard.ts';
 import { Ledger } from './trust.ts';
-import { extractPayments, reconcile, MAX_INVOICE_CHARS } from './assistant.ts';
+import { extractPayments, reconcile, otherAccounts, MAX_INVOICE_CHARS } from './assistant.ts';
 import { KeyPair } from 'near-api-js';
 
 const live = process.argv.includes('--live');
@@ -204,7 +204,9 @@ async function runAgent(doc: string) {
       results.push({ id: act.id, to: p.to, amount: p.amountNear, status: 'ERROR', detail: msg });
     }
   }
-  return { source: ex.source, note: ex.note ?? '', results, logs };
+  const mentioned = otherAccounts(doc, [...ex.payments.map((p) => p.to), ...results.map((r) => r.to)]);
+  if (mentioned.length) logs.push(`The invoice also names ${mentioned.join(', ')}. Nothing was paid to ${mentioned.length > 1 ? 'them' : 'it'}.`);
+  return { source: ex.source, note: ex.note ?? '', results, mentioned, logs };
 }
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -228,7 +230,8 @@ function codespaceOrigin(o: string): boolean {
 }
 // Sign-in for the local dashboard. In live mode (or when DASHBOARD_TOKEN is set) the pages that act and the whole API
 // need a secret that only the person at this terminal has: open the link printed at start-up, which sets a session cookie.
-const LOCK = live || !!process.env.DASHBOARD_TOKEN;
+// Live mode can move test money, so it is locked behind the printed link. On your own computer you can switch the lock off: DASHBOARD_LOCK=off npm run web -- --live. It is refused inside a Codespace.
+const LOCK = (live && !(process.env.DASHBOARD_LOCK === 'off' && !process.env.CODESPACE_NAME)) || !!process.env.DASHBOARD_TOKEN;
 const TOKEN = process.env.DASHBOARD_TOKEN || randomBytes(16).toString('hex');
 const safeEq = (a: string, b: string) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); };
 const cookieOk = (h?: string) => { const m = /(?:^|;\s*)tp_session=([A-Za-z0-9_-]+)/.exec(h ?? ''); return !!m && safeEq(m[1], TOKEN); };

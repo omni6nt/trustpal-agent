@@ -171,8 +171,8 @@ const screens = {
     return `<h1 class="in">Payments</h1>
     <p class="lede in">Paste an invoice. The AI reads it and each payment travels along four checks. People already on your list are paid within your limits when the amount matches the invoice total. New payees, and any amount that does not match, always wait for you. The sample hides an instruction aimed at the AI.</p>
     <div class="payment-steps in"><span><b>1</b> AI reads</span><i></i><span><b>2</b> Trustpal checks</span><i></i><span><b>3</b> You approve if needed</span><i></i><span><b>4</b> Contract executes</span></div>
-    <section class="slab in"><label for="doc">Invoice text<textarea id="doc" spellcheck="false" style="margin-top:7px"></textarea></label>
-      <div class="row" style="margin-top:18px"><button class="btn" id="readbtn">Read this invoice</button><button class="btn ghost" id="cleanbtn">Use a clean invoice</button><span class="sub">AI in use: ${esc(S.ai)}</span></div>
+    <section class="slab in"><label for="doc">Invoice text<textarea id="doc" spellcheck="false" style="margin-top:7px" rows="7" placeholder="Paste an invoice here, in plain words. For example:\nInvoice 12 from Alex. Logo design. Amount due 0.05 NEAR. Please pay alex.testnet."></textarea></label>
+      <div class="row" style="margin-top:18px"><button class="btn" id="readbtn">Read this invoice</button><button class="btn ghost" id="samplebtn">Try the sample with a hidden instruction</button><button class="btn ghost" id="cleanbtn">Try a clean sample</button><span class="sub">AI in use: ${esc(S.ai)}</span></div>
       <div id="invres" style="margin-top:14px"></div></section>`;
   },
   approvals() {
@@ -356,13 +356,14 @@ function bind(r) {
   }
   if (r === 'invoices') {
     const clean = `INVOICE #2001 - Logo design - Total: 0.05 NEAR\nPay to: ${S.recipients[0] || 'contractor.testnet'}`;
-    $('doc').value = S.sample; $('cleanbtn').onclick = () => { $('doc').value = clean; };
+    $('samplebtn').onclick = () => { $('doc').value = S.sample; }; $('cleanbtn').onclick = () => { $('doc').value = clean; };
     $('readbtn').onclick = async (e) => {
-      const b = e.currentTarget; if (busy) return; busy = true; b.disabled = true; b.textContent = 'Reading';
+      const b = e.currentTarget; if (busy) return; if (!$('doc').value.trim()) { $('invres').innerHTML = '<div class="empty">Paste an invoice first, or try one of the samples.</div>'; return; } busy = true; b.disabled = true; b.textContent = 'Reading';
       try {
         const res = await api('/api/agent', { method: 'POST', body: $('doc').value, signal: AbortSignal.timeout(60000) }); await refresh();
         const acts = res.results.map((x) => S.activity.find((a) => a.id === x.id) || { outcome: 'info' });
         $('invres').innerHTML = res.results.length ? res.results.map((x, i) => { const a = acts[i] || { outcome: 'info' }; const [c, l] = tagFor(a.outcome); if (/^HELD/.test(a.headline || '')) return `<div class="heldcard" role="group" aria-label="Payment held for you"><h3>Held for you: this payment needs your decision</h3><p>The AI proposed a payment that Trustpal will not make on its own. <b>Nothing was paid.</b> It is either to someone not on your list, or its amount does not match the invoice total.</p><dl><dt>Pay to</dt><dd>${esc(x.to)}</dd><dt>Amount</dt><dd>${fmt(x.amount)} NEAR</dd></dl><p class="sub">If you still want it, approve this exact payment. Otherwise ignore it.</p><div class="row"><a class="btn" href="#approvals">Review in Approvals</a></div></div>`; return `<div class="res" style="animation-delay:${i * 120}ms"><h3 class="num">${fmt(x.amount)} NEAR to ${esc(x.to)}</h3><span class="tag ${c}">${l}</span><span class="why">${esc(a.headline || x.status)}</span></div>`; }).join('') : `<div class="empty">${esc(res.note || 'The AI found no payments in this text.')}</div>`;
+        if (res.mentioned && res.mentioned.length) $('invres').insertAdjacentHTML('beforeend', `<div class="heldcard" role="note"><h3>The invoice also names ${res.mentioned.map((x) => esc(x)).join(', ')}</h3><p><b>Nothing was paid to ${res.mentioned.length > 1 ? 'them' : 'it'}.</b> Trustpal only pays the invoice's own total to the payee the AI proposed. If you meant to pay ${res.mentioned.length > 1 ? 'one of them' : 'it'}, approve an exact payment on the Approvals page.</p></div>`);
         for (const a of acts) if (a.id) await railPlay(a);
       } catch (err) { $('invres').innerHTML = `<div class="empty">Something went wrong: ${esc(err.message)}. Check the terminal running npm run web.</div>`; }
       b.disabled = false; b.textContent = 'Read this invoice'; busy = false;
@@ -483,7 +484,7 @@ document.addEventListener('click', async (e) => {
 function ribbonHtml() {
   const live = S.network === 'testnet';
   const chip = walletAcct
-    ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'View only'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
+    ? `<span class="wchip on"><i></i><b>${esc(walletAcct)}</b><em>${isOwnerAcct() ? 'Owner' : 'Visitor'}</em><button id="wout" aria-label="Disconnect wallet">Disconnect</button></span>`
     : `<button class="wchip" id="wconn"><i></i>Connect wallet</button>`;
   return `<div class="ribbon ${live ? 'live' : ''}"><b>${live ? 'Live testnet: configured demo business' : 'Practice mode: no money, no blockchain'}</b><span>${live ? 'Test money only. You approve payments in your wallet.' : 'Rules are simulated on your computer.'}</span>${chip}</div>${pauseHtml(live)}`;
 }

@@ -11,7 +11,7 @@
 **Two-minute judge path (needs no keys, practice mode):**
 1. `npm install`, then `npm run web`.
 2. Open the link it prints. You land on Home in practice mode (simulated, no money, no blockchain).
-3. Open **Payments**, press **Read this invoice** (the sample hides an instruction to pay a stranger). You see the stranger payment refused and nothing paid.
+3. Open **Payments**, press **Try the sample with a hidden instruction**, then **Read this invoice**. The sample hides an instruction to pay a stranger. You see that nothing is paid to the stranger: either the invoice-total check holds it, or the page tells you the invoice also names that account and it was not paid. (You can also paste your own invoice in plain words, such as "Amount due 0.05 NEAR, please pay alex.testnet".)
 4. Open **For judges, then Demo: try to break it**, press **Run all five**. You see each attack stopped, and which layer stopped it.
 5. For the live testnet evidence without any keys: `npm run verify-live`.
 
