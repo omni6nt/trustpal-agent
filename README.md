@@ -15,7 +15,7 @@
 4. Open **For judges, then Demo: try to break it**, press **Run all five**. You see each attack stopped, and which layer stopped it.
 5. For the live testnet evidence without any keys: `npm run verify-live`.
 
-Red-team of the invoice reader (`npm run redteam`, Gemini, 23 invoices: 20 attack or edge cases plus 3 clean; results in `evidence/`): no money moved wrongly in any run. The model itself is sometimes fooled, more with a naive prompt than with the safer one, and a later layer stops every such case. This is a small hand-written set, not a proof.
+Red-team of the invoice reader (`npm run redteam`, real Gemini model, 23 invoices: 20 attack or edge cases plus 3 clean; reports in `evidence/`). **Money moved wrongly: 0 in every run.** With the safer prompt the model proposed a bad payment in 1 of 20 attack cases (a look-alike payee that the invoice itself named, which Trustpal then stopped); with a deliberately naive prompt it did so in 8 of 20. Every such case was stopped by a later layer. Sometimes a call gets no answer (free-tier limits); the reader then proposes nothing. This is a small hand-written set, not a proof.
 
 Trustpal gives an AI a role in a small business's payment operations without giving it unrestricted control of the business's money. The AI reads invoices and proposes payments. The owner approves the exact payment. A smart contract on NEAR is the only thing that can move money, and it enforces the owner's rules whatever the AI is told.
 

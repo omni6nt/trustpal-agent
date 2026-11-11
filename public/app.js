@@ -59,14 +59,20 @@ async function railPlay(a) {
       for (let j = i + 1; j < 4; j++) pills[j].classList.add('dim');
       break;
     }
-    if (i === 1 && a.guardSkipped) { pills[i].classList.add('skip'); gates[i].classList.add('skip'); }
+    if (i === 2 && a.outcome === 'paid' && /trusted payee/i.test(a.headline || '')) { pills[i].classList.add('skip'); gates[i].classList.add('skip'); }
+    else if (i === 1 && a.guardSkipped) { pills[i].classList.add('skip'); gates[i].classList.add('skip'); }
     else if (i === 3 && a.outcome === 'pending') { pills[i].classList.add('wait'); gates[i].classList.add('wait'); aside.classList.add('paid'); }
     else { pills[i].classList.add('pass'); gates[i].classList.add('pass'); }
   }
   if (a.outcome === 'paid') { aside.classList.add('paid'); pills[3].classList.add('fin'); stamp.classList.add('show'); burst(3, '#4CC2A1'); }
   caption.className = 'verdict ' + (a.outcome === 'paid' ? 'good' : a.outcome === 'stopped' ? 'bad' : '');
   caption.textContent = a.headline;
+  playedAt = Date.now(); clearTimeout(fadeT); fadeT = setTimeout(railFade, 8000);
 }
+let fadeT = 0, playedAt = 0;
+function railFade() { clearTimeout(fadeT); railReset(); caption.className = 'verdict'; caption.textContent = 'Run a payment to watch it travel down.'; }
+document.addEventListener('click', () => { if (Date.now() - playedAt > 500) railFade(); });
+window.addEventListener('hashchange', railFade);
 async function railIdle() {
   if (reduced) return;
   for (let i = 0; i < 4; i++) { moveTo(i); await sleep(420); pills[i].classList.add('pass'); gates[i].classList.add('pass'); }
@@ -235,6 +241,7 @@ const screens = {
     return `<h1 class="in">Activity</h1>
     <p class="lede in">Everything the AI tried, and what happened. Each entry is chained to the one before, so editing an entry that is still in the log breaks the chain. It is not stored on the blockchain, so it is not a complete audit trail.</p>
     <p class="in"><button class="btn ghost sm" id="csv">Download records (CSV)</button></p>
+    ${S.network === 'testnet' ? `<p class="sub in">The blockchain is the authoritative record. Every payment, approval and pause is a transaction on the contract: <a href="https://testnet.nearblocks.io/address/${esc(S.contract)}" target="_blank" rel="noopener">see them all for ${esc(S.contract)} on the NEAR testnet explorer</a>.</p>` : ''}
     <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded by this app</span></p>
     <section class="slab in" style="margin-top:20px">${S.activity.length ? `<ul class="tl">${S.activity.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">No activity yet.</div>'}</section>`;
   },
