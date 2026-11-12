@@ -2,7 +2,7 @@
 
 **A business an AI can run but cannot rob.**
 
-> **Needs Node 22.22.2 or newer** (`node --version`). Then: `npm install`, `npm run web`, open the link it prints. Do X, see Y is in the two-minute path below.
+> **Needs Node 22.22.2 or newer** (`node --version`). Then run `npm install` and `npm run web`, and open the link it prints. The two-minute judge path is below.
 
 **What "cannot rob" means, precisely.** The AI cannot change the rules, approve its own payments, add a key or call any other contract, and a payment to someone who is not on your list is refused by the contract unless you approved that exact payment. It *can* pay people already on your list, within the limits you set. Before it pays, Trustpal checks that the proposed payee is the one payee the invoice names and that the amount equals the invoice total; anything else is held for the owner. If the model's reading were wrong in a way that slipped past those checks, the most that could leave is a payment to a listed payee within your limits. The contract enforces the per-payment limit and the daily cap on every payment route, and an AI-proposed amount that does not match the invoice total is held for the owner instead of paid. (An owner-approved payment is exact and is not capped by the per-payment limit; it still counts toward the daily cap.)
 
