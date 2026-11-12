@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Ledger } from '../src/trust.ts';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { restoreActivity } from '../src/restore.ts';
 
 test('restored activity comes from the log, never invents a paid payment', () => {
@@ -17,4 +20,15 @@ test('restore keeps only the newest entries', () => {
   const l = new Ledger();
   for (let i = 0; i < 50; i++) l.append({ subject: 'a.testnet', amountUsd: 0, status: 'completed', ref: 'R' + i });
   assert.equal(restoreActivity(l.claims, 40).length, 40);
+});
+
+test('F2: a ledger file with an edited row or an unreadable line does not verify', () => {
+  const f = join(mkdtempSync(join(tmpdir(), 'tp-')), 'l.jsonl');
+  new Ledger(f).append({ subject: 'x', amountUsd: 0, status: 'blocked', ref: 'r1' });
+  assert.equal(new Ledger(f).verify().ok, true);
+  const row = JSON.parse(readFileSync(f, 'utf8').split('\n')[0]);
+  writeFileSync(f, JSON.stringify({ ...row, status: 'completed' }) + '\n');
+  assert.equal(new Ledger(f).verify().ok, false);
+  writeFileSync(f, '{not json\n');
+  assert.equal(new Ledger(f).verify().ok, false);
 });

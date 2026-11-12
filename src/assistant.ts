@@ -148,6 +148,14 @@ export function otherAccounts(doc: string, proposedTo: string[]): string[] {
   return [...new Set(found)].filter((a) => !seen.has(a)).slice(0, 5);
 }
 
+const ACCT = '[a-z0-9][a-z0-9_-]*(?:\\.[a-z0-9_-]+)*\\.(?:testnet|near)';
+const PAYEE_RE = new RegExp(`\\b(?:pay(?:ment)?(?:\\s+to)?|payee|recipient|beneficiary|send\\s+to)\\s*(?:is|account)?\\s*[:\\-]?\\s*(${ACCT})\\b`, 'gi');
+/** The payee an invoice names on a labelled line ("Pay to: x.testnet", "Payee: x.testnet"). Zero-width characters are removed first. */
+export function invoicePayees(doc: string): string[] {
+  const clean = doc.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
+  return [...new Set([...clean.matchAll(PAYEE_RE)].map((x) => x[1].toLowerCase()))];
+}
+
 export function reconcile(doc: string, proposals: Proposed[]): { ok: Proposed[]; held: Held[] } {
   // Every "Total: X NEAR" in the document. Exactly one distinct value is needed; two different totals is ambiguous.
   const totals = [...new Set([...doc.matchAll(TOTAL_RE)].map((x) => x[1]))];
@@ -156,11 +164,14 @@ export function reconcile(doc: string, proposals: Proposed[]): { ok: Proposed[];
   const held: Held[] = [];
   let total: bigint | null = null;
   try { total = m ? nearToYocto(m[1]) : null; } catch { total = null; }
+  const payees = invoicePayees(doc);
   let used = false;
   for (const p of proposals) {
     let amt: bigint | null = null;
     try { amt = nearToYocto(p.amountNear); } catch { amt = null; }
     if (total === null) held.push({ ...p, reason: 'The invoice does not state a total to check this amount against' });
+    else if (payees.length !== 1) held.push({ ...p, reason: payees.length === 0 ? 'The invoice does not name one payee to check this against' : 'The invoice names more than one payee' });
+    else if (p.to.toLowerCase() !== payees[0]) held.push({ ...p, reason: `The proposed payee is not the payee the invoice names (${payees[0]})` });
     else if (amt !== total) held.push({ ...p, reason: `The amount does not match the invoice total (${totals[0]} NEAR)` });
     else if (used) held.push({ ...p, reason: 'A second payment on one invoice needs the owner' });
     else { ok.push(p); used = true; }

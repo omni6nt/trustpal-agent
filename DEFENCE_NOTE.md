@@ -1,6 +1,6 @@
 # Trustpal Defence Note
 
-Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR is the only thing that can move money. "Cannot rob" is precise: the AI cannot change any rule or approve its own payments, and a payment to someone who is not on the list and has no exact approval is refused by the contract. It can still be fooled into a wrong amount for someone already on the list; the contract enforces the per-payment limit and daily cap on every route, and AI-proposed amounts that do not match the invoice total are held for the owner.
+Trustpal is a small business whose payments an AI can run but cannot rob: the AI reads invoices and proposes payments, the owner approves the exact payment, and a contract on NEAR holds the money and enforces the owner's rules (the owner's own key, and the policy account's key until it is deleted, are the disclosed exceptions). "Cannot rob" is precise: the AI cannot change any rule or approve its own payments, and a payment to someone who is not on the list is refused by the contract unless the owner approved that exact payment. Before paying, Trustpal checks that the proposed payee is the one payee the invoice names and that the amount equals the invoice total; anything else is held for the owner. The contract enforces the per-payment limit and daily cap on every route, so the most a fooled AI could move is a payment to a listed payee within those limits.
 
 ## Judge demo path (5 minutes)
 
@@ -46,7 +46,7 @@ The gates are not equal. The guard is useful but advisory: it lives in the appli
 | Policy contract | A Rust smart contract (near-sdk 5) that holds the treasury and enforces every rule. 31 unit tests. | The final authority for the treasury it holds: money held by the contract cannot leave without the contract agreeing. |
 | Agent key | A NEAR function-call access key that can call one method, `pay`, on the policy contract. It has a small gas allowance. | If the AI or its host is compromised, the thief gets a key that can only ask for payments the owner already approved. |
 | Guard | TypeScript checks run before the AI's request is sent: valid account name, blocklist, look-alike detection, account exists, first-time-payee warning. | Catches bad payees early and explains why in plain words. Advisory, not the last line. |
-| Activity log | A hash-chained record of every claim and outcome. Each entry includes the hash of the one before. | Editing an entry that is still in the log breaks the chain and is detected. Deleting the newest entries, or rewriting the log and its hashes together, would not be: the log is not anchored on-chain. In live mode it is saved to a local file. |
+| Activity log | A hash-chained record of every claim and outcome. Each entry includes the hash of the one before. | Editing an entry that is still in the log breaks the chain; the app checks the chain when it starts and shows no earlier sessions if it fails. Deleting the newest entries, or rewriting the log and its hashes together, would not be: the log is not anchored on-chain. In live mode it is saved to a local file. |
 | AI layer | Reads invoice text and proposes payments. Runs a real Claude model when an API key is set, otherwise a scripted stand-in that deliberately obeys any instruction. | The stand-in lets anyone reproduce the attacks without an API key. |
 | Dashboard | A local website: overview, invoice reader, approvals, revenue split, who can do what, owner settings, activity, and a security lab. | Makes the rules and the attacks visible. Shows which gate stopped each payment. |
 | Owner scripts | `scripts/owner.sh` for approvals, split, limits, payees, pause and client payments; `setup-testnet.sh` for deployment; `key-limits.ts` and `attack.ts` for proof. | The owner's key stays in the owner's own terminal. |
@@ -70,7 +70,7 @@ These are the values only the owner sets. The contract enforces them and the AI 
 | Withdraw | The owner can take money out | Cannot touch money already reserved for pending payments |
 | One-time references | Every invoice reference can be paid once | Stops replay |
 
-The split happens automatically on every incoming client payment, and the AI cannot change the percentages. On the testnet deployment the split is 50% to the contractor, 20% to the owner, and 30% kept in the treasury. In the dashboard's practice mode the owner can change every value above and see the effect. On testnet the dashboard never holds the owner key: approvals and cancellations are signed in the owner's wallet, and the other owner changes (limits, payees, split, pause) are printed as commands to run.
+The split happens when a client pays through the contract's receive_revenue method (a plain transfer to the account is not split), and the AI cannot change the percentages. On the testnet deployment the split is 50% to the contractor, 20% to the owner, and 30% kept in the treasury. In the dashboard's practice mode the owner can change every value above and see the effect. On testnet the dashboard never holds the owner key: approvals and cancellations are signed in the owner's wallet, and the other owner changes (limits, payees, split, pause) are printed as commands to run.
 
 ## Evidence
 
@@ -83,7 +83,7 @@ Every claim falls into one of three groups. Nothing in the first group is a prom
 | Fraud on an approved invoice is refused | A fake invoice reusing an approved reference with the attacker's address was refused by the guard, and also rejected by the contract as not matching what the owner approved |
 | The approved invoice pays exactly as approved | Paid and confirmed by the contract's own payment record |
 | Replay is rejected | Paying the same reference again was rejected as already used |
-| The agent key is truly limited | Six attempts were refused by the network: send NEAR, add a key, pause, create an approval, change the split, call another contract |
+| The agent key is truly limited | Six attempts were refused by the network: send NEAR, add a key, pause, create an approval, change the split, call another contract. Reproduce with `npm run key-limits` |
 | The revenue split works | A 1 NEAR client payment was divided 0.5 to the contractor, 0.2 to the owner, 0.3 kept, as logged by the contract |
 | The look-alike check fires | The guard blocked an address one character away from an approved one |
 | The owner approves from the dashboard with a wallet | `approve_payment` was signed in Meteor by `omni6nt-owner.testnet`, succeeded on testnet, and the contract's `get_approval` returned the exact recipient, amount and expiry. A visitor wallet connects as view-only |
@@ -98,7 +98,7 @@ Accounts: owner `omni6nt-owner.testnet`, policy contract `omni6nt-policy3.testne
 **2. Tested offline**
 
 - 31 contract unit tests covering limits, approvals, cooldown, split rounding, pause, withdraw protection, the failed-transfer callback (reservation released, reference stays used) and two payments racing the daily cap.
-- 49 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's sign-in, Host/Origin checks and framing headers. `npm test` does not run the contract tests; `npm run test:contract` does.
+- 58 application tests covering the guard, the look-alike check, the AI layer, the activity log, the offline simulation and the dashboard server's sign-in, Host/Origin checks and framing headers. `npm test` does not run the contract tests; `npm run test:contract` does.
 - Checked by hand, not by automated tests: the dashboard and the owner settings in a browser at desktop, laptop and phone widths.
 
 **3. Simulated or prototype**
@@ -142,6 +142,7 @@ A defence note that hides its weak points is not a defence. These are the real o
 - **Approvals are wallet-signed; there is no account system.** The owner approves from the dashboard by signing in a wallet (tested with Meteor on testnet). There are no email accounts or team roles yet. Email or passkey sign-in with a view-only role is the production direction. Other owner changes (split, limits, payees) still run from the command line on testnet.
 - **The policy account's own key.** When the contract was deployed, its account got a full-access key, held by the team. Whoever holds it can redeploy the contract and bypass every rule. It should be deleted after deployment (then the code is frozen). Until then, the contract is not immutable.
 - **Failed transfers and expiry.** A transfer that fails after the contract accepted it releases the daily reservation but keeps the invoice reference used; an expired approval keeps its reference until cancelled. The owner issues a new reference.
+- **Approvals do not reserve funds.** An approval is permission, not a held balance: if the money is withdrawn or spent first, the approved payment fails. Pause blocks outgoing payments, not incoming revenue.
 - **The approval lane is not capped by the per-payment limit.** An exact owner approval can be larger than the limit; it still counts toward the daily cap.
 - **The guard can degrade.** If the network lookup of an account fails, the guard warns instead of blocking. The contract is unaffected.
 - **The local dashboard server holds the agent key in live mode.** It now refuses requests from other websites (Host and Origin checks), but anyone with access to the machine can use it. The agent key can still only call `pay`.
@@ -185,7 +186,7 @@ A scan of other entries, gathered by the team and not independently verified, sh
 
 ```bash
 npm install
-npm test            # 49 application tests (Node 22.22.2+)
+npm test            # 58 application tests (Node 22.22.2+)
 npm run test:contract   # 31 contract tests (Rust/Cargo 1.85+)
 npm run attack      # the attack suite against the offline chain
 npm run web         # dashboard in practice mode at http://localhost:3000

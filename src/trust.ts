@@ -35,15 +35,16 @@ function hashClaim(prev: string, c: Omit<Claim, 'prev' | 'hash'>): string {
 /** Append-only, hash-chained claim ledger. Editing any past entry breaks verify(). */
 export class Ledger {
   claims: Claim[] = [];
+  /** True when the file had a line that could not be read. The log is then treated as altered. */
+  unreadable = false;
   file?: string;
 
   constructor(file?: string) {
     this.file = file;
     if (file && existsSync(file)) {
-      this.claims = readFileSync(file, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .map((l) => JSON.parse(l) as Claim);
+      for (const l of readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
+        try { this.claims.push(JSON.parse(l) as Claim); } catch { this.unreadable = true; }
+      }
     }
   }
 
@@ -64,6 +65,7 @@ export class Ledger {
   }
 
   verify(): { ok: boolean; brokenAt?: number } {
+    if (this.unreadable) return { ok: false, brokenAt: -1 };
     let prev = GENESIS;
     for (let i = 0; i < this.claims.length; i++) {
       const c = this.claims[i];

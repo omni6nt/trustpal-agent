@@ -55,7 +55,7 @@ try {
   const onchain = createHash('sha256').update(Buffer.from(code.code_base64, 'base64')).digest('hex');
   console.log(`   on-chain code hash (NEAR): ${acct.code_hash}`);
   console.log(`   on-chain code sha256 (hex): ${onchain}`);
-  const wasmPath = process.env.WASM_PATH || 'contract/target/near/trustpal_policy.wasm';
+  const wasmPath = process.env.WASM_PATH || (existsSync('contract/deployed/trustpal_policy.wasm') ? 'contract/deployed/trustpal_policy.wasm' : 'contract/target/near/trustpal_policy.wasm');
   if (existsSync(wasmPath)) {
     const local = createHash('sha256').update(readFileSync(wasmPath)).digest('hex');
     console.log(`   local build ${wasmPath}: ${local}`);

@@ -72,7 +72,7 @@ const LABELS: Record<string, string> = {
   approved: 'Pay the owner-approved invoice', fraud: 'Fraud on an approved invoice', replay: 'Replay a paid invoice', lookalike: 'Look-alike address',
 };
 let actId = 0;
-for (const r of restoreActivity(ledger.claims)) activity.unshift({ id: ++actId, at: r.at, label: r.label, outcome: r.outcome, stoppedAt: null, headline: r.headline, logs: [], to: r.to, amount: r.amount, mode: live ? 'testnet' : 'practice' });
+for (const r of ledger.verify().ok ? restoreActivity(ledger.claims) : []) activity.unshift({ id: ++actId, at: r.at, label: r.label, outcome: r.outcome, stoppedAt: null, headline: r.headline, logs: [], to: r.to, amount: r.amount, mode: live ? 'testnet' : 'practice' });
 function record(label: string, headline: string, logs: string[], extra: Partial<Activity> = {}): Activity {
   const a: Activity = { id: ++actId, at: new Date().toISOString(), label, headline, logs, mode: live ? 'testnet' : 'practice', tx: lastTx, ...classify(headline), ...extra };
   lastTx = undefined;
@@ -337,7 +337,7 @@ createServer(async (req, res) => {
       const t = url.searchParams.get('t');
       if (t && safeEq(t, TOKEN) && !url.pathname.startsWith('/api/')) {
         const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
-        res.writeHead(302, { 'set-cookie': `tp_session=${TOKEN}; HttpOnly; SameSite=Lax; Path=/${secure}`, location: url.pathname === '/' ? '/app.html' : url.pathname, 'cache-control': 'no-store' }); res.end(); return;
+        res.writeHead(302, { 'set-cookie': `tp_session=${TOKEN}; HttpOnly; SameSite=Lax; Path=/${secure}`, location: url.pathname === '/' ? '/' : url.pathname, 'cache-control': 'no-store' }); res.end(); return;
       }
       const isApi = url.pathname.startsWith('/api/');
       if ((isApi || LOCKED_PAGES.has(url.pathname)) && !cookieOk(req.headers.cookie)) {

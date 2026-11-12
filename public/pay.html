@@ -31,9 +31,9 @@
 <script src="/wallet.js"></script>
 <script>
 const $=id=>document.getElementById(id);const q=new URLSearchParams(location.search);
-const to=(q.get('to')||'omni6nt-policy3.testnet').toLowerCase();
+const DEFAULT='omni6nt-policy3.testnet';const asked=(q.get('to')||DEFAULT).toLowerCase();const to=DEFAULT;
 $('to').textContent=to;
-if(!/^[a-z0-9._-]{2,64}$/.test(to)){$('msg').className='msg bad';$('msg').textContent='This payment link has an invalid account name.';$('conn').disabled=true}
+if(asked!==DEFAULT){$('msg').className='msg bad';$('msg').textContent='This link asks to pay '+asked+', which is not the Trustpal treasury. For your safety this page only pays '+DEFAULT+'. Ask the business for a new link.';$('conn').disabled=true}
 function view(){const a=TrustpalWallet.account();$('conn').hidden=!!a;$('go').hidden=!a;$('out').hidden=!a;if(a){$('msg').className='msg';$('msg').textContent='Connected as '+a+'.'}}
 TrustpalWallet.init(to).then(r=>{TrustpalWallet.onChange(view);view();if(r.returnedTx){$('msg').className='msg ok';$('msg').innerHTML='Payment sent. <a target="_blank" rel="noopener" href="https://testnet.nearblocks.io/txns/'+r.returnedTx+'">See it on the explorer</a>.'}}).catch(e=>{$('msg').className='msg bad';$('msg').textContent='Wallet could not start: '+e.message});
 $('conn').onclick=()=>TrustpalWallet.connect();$('out').onclick=()=>TrustpalWallet.disconnect();

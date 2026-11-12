@@ -77,7 +77,7 @@ test('reconcile holds everything when there is no total, or two different totals
 });
 
 test('a second payment for the same total is held', () => {
-  const r = reconcile('Total: 1 NEAR', [{ to: 'a.testnet', amountNear: '1' }, { to: 'b.testnet', amountNear: '1' }]);
+  const r = reconcile('Pay to: a.testnet\nTotal: 1 NEAR', [{ to: 'a.testnet', amountNear: '1' }, { to: 'b.testnet', amountNear: '1' }]);
   assert.equal(r.ok.length, 1);
   assert.equal(r.held.length, 1);
 });
