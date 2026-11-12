@@ -244,7 +244,7 @@ const screens = {
     <p class="in"><button class="btn ghost sm" id="csv">Download records (CSV)</button></p>
     ${S.network === 'testnet' ? `<p class="sub in">The blockchain is the authoritative record. Every payment, approval and pause is a transaction on the contract: <a href="https://testnet.nearblocks.io/address/${esc(S.contract)}" target="_blank" rel="noopener">see them all for ${esc(S.contract)} on the NEAR testnet explorer</a>.</p>` : ''}
     <p class="in"><span class="tag ${S.ledgerIntact ? 'paid' : 'stopped'}">${S.ledgerIntact ? 'Chain intact' : 'Chain broken'}</span> <span class="sub" style="display:inline;margin-left:8px">${S.ledgerLength} entries recorded by this app</span></p>
-    ${S.network === 'testnet' ? `<section class="slab in" style="margin-top:20px"><h2>On the blockchain</h2><p class="sub" style="margin-top:-6px">Recent transactions, read from the public NEAR testnet explorer. This is the authoritative record.</p><p><button class="btn ghost sm" id="chainbtn">Load recent transactions</button>${walletAcct ? ' <button class="btn ghost sm" id="chainw">Load my wallet</button>' : ''}</p><div id="chainout"></div></section>` : ''}
+    ${S.network === 'testnet' ? `<section class="slab in" style="margin-top:20px"><h2>On the blockchain</h2><p class="sub" style="margin-top:-6px">The public NEAR testnet explorer is the authoritative record of every payment, approval and pause.</p><p><a class="btn ghost sm" href="https://testnet.nearblocks.io/address/${esc(S.contract)}" target="_blank" rel="noopener">Open the contract's transactions</a>${walletAcct ? ` <a class="btn ghost sm" href="https://testnet.nearblocks.io/address/${esc(walletAcct)}" target="_blank" rel="noopener">Open my wallet's transactions</a>` : ''}</p></section>` : ''}
     <section class="slab in" style="margin-top:20px">${S.activity.length ? `<ul class="tl">${S.activity.map((a) => feedItem(a, true)).join('')}</ul>` : '<div class="empty">No activity yet.</div>'}</section>`;
   },
   setup() {
@@ -349,23 +349,7 @@ function renderPayees() {
   $('payees').innerHTML = S.recipients.length ? S.recipients.map((r) => `<div class="payee"><span class="mono" style="word-break:break-all">${esc(r)}</span><button class="btn ghost sm" data-del="${esc(r)}">Remove</button></div>`).join('') : '<div class="empty">No payees yet. The AI can only pay exact invoices you approve.</div>';
   document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => { try { if (await ownerDo({ action: 'recipient-remove', account: b.dataset.del }, cmdLine('recipient-remove ' + b.dataset.del), 'Payee removed')) rerender(); } catch (e) { $('perr').className = 'note bad'; $('perr').textContent = e.message; } }));
 }
-async function loadChain(acct) {
-  const out = $('chainout'); if (!out) return; out.innerHTML = '<p class="sub">Loading…</p>';
-  const link = `<a href="https://testnet.nearblocks.io/address/${esc(acct)}" target="_blank" rel="noopener">Open ${esc(acct)} on the explorer</a>`;
-  try {
-    const r = await fetch(`https://api-testnet.nearblocks.io/v1/account/${encodeURIComponent(acct)}/txns?page=1&per_page=15`);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json(); const rows = (j.txns || []);
-    if (!rows.length) { out.innerHTML = `<p class="sub">No transactions found. ${link}</p>`; return; }
-    out.innerHTML = `<ul class="tl">${rows.map((t) => {
-      const a0 = (t.actions && t.actions[0]) || {}; const what = a0.method || a0.action || 'transaction';
-      const ok = !t.outcomes || t.outcomes.status !== false; const when = t.block_timestamp ? new Date(Number(t.block_timestamp) / 1e6).toLocaleString() : '';
-      return `<li class="${ok ? 'paid' : 'stopped'}"><span><b>${esc(String(what).replace(/_/g, ' '))}</b> <span class="tag ${ok ? 'paid' : 'stopped'}" style="margin-left:6px">${ok ? 'Succeeded' : 'Failed'}</span><br><small>${esc(when)} · from ${esc(t.predecessor_account_id || '')}</small></span> <a href="${explorerTx(esc(t.transaction_hash))}" target="_blank" rel="noopener">View</a></li>`;
-    }).join('')}</ul><p class="sub">${link}</p>`;
-  } catch (e) { out.innerHTML = `<p class="note bad">Could not load from the explorer right now (${esc(e.message)}). ${link}</p>`; }
-}
 function bind(r) {
-  if (r === 'activity') { const b = $('chainbtn'); if (b) b.onclick = () => loadChain(S.contract); const w = $('chainw'); if (w) w.onclick = () => loadChain(walletAcct); }
 
   document.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = () => copy($(b.dataset.copy).textContent)));
   if (r === 'overview') {
