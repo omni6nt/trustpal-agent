@@ -1,0 +1,20 @@
+
+> trustpal-agent@0.1.0 key-limits
+> node --experimental-strip-types scripts/key-limits.ts
+
+Network says the agent key can only call: contract=omni6nt-policy3.testnet methods=["pay"] allowance=239356352422851500000000
+
+OK    send 0.01 NEAR straight from the owner account
+      refused: Access key requires full access
+OK    add a new full-access key to the owner account
+      refused: Access key requires full access
+OK    call a different method on the policy contract (set_paused)
+      refused: Access key does not allow method set_paused
+OK    create an approval for itself (approve_payment)
+      refused: Access key does not allow method approve_payment
+OK    rewrite the revenue split (set_split)
+      refused: Access key does not allow method set_split
+OK    call pay on some other contract
+      refused: Access key receiver omni6nt-policy3.testnet does not match transaction receiver omni6nt-alex.testnet
+
+All 6 forbidden actions were refused with a NEAR permission error, and the network confirms the key is limited to "pay".
