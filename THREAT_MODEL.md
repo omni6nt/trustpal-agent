@@ -17,7 +17,7 @@ The treasury held by the policy contract, and the owner's rules (limits, payees,
 - The owner and the owner's full-access key.
 - NEAR's enforcement of function-call key permissions.
 - The contract code (unaudited; see limits).
-- Whoever holds the policy account's own full-access key. It was used to deploy the contract and can redeploy it, bypassing every rule. Delete that key after deployment to freeze the code.
+- Whoever holds the policy account's own full-access key. It was used to deploy the contract and can redeploy it, bypassing every rule. That key was deleted on 12 Nov 2026, so the code can no longer be changed (`npm run verify-live` shows FROZEN).
 
 ## Attacks and defences
 
