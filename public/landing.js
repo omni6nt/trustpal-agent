@@ -66,7 +66,7 @@ $$('.rv').forEach((el,i)=>{el.style.transitionDelay=(i%4)*90+'ms';io.observe(el)
 function countTo(el){if(el.dataset.done)return;el.dataset.done=1;const to=+el.dataset.to;if(reduce){el.textContent=to;return}const t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/1100);el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f)})(t0)}
 
 /* ---- peek ---- */
-const caps=[['overview','Where the money stands, the four checks, and what the AI can and cannot do.'],['invoices','Paste an invoice. The AI reads it and you watch it travel through the checks.'],['revenue split','Set who gets what when a client pays. The treasury keeps the rest.'],['security lab','Run the attacks yourself. Each one stops at the check that caught it.'],['activity','Every payment, approval and refusal, labelled practice or live.']];
+const caps=[['home','Where payments are, what needs you, and a Pause button that is always in reach.'],['invoices','Paste an invoice. The AI reads it and you watch it travel through the checks.'],['money in','Set who gets what when a client pays. The treasury keeps the rest.'],['security lab','Run the attacks yourself. Each one stops at the check that caught it.'],['activity','Every payment, approval and refusal, labelled practice or live.']];
 const imgs=$$('#frame .shots img'),tabs=$$('#peekTabs button');
 function peek(i){imgs.forEach((m,j)=>m.classList.toggle('on',i===j));tabs.forEach((t,j)=>t.classList.toggle('on',i===j));$('#frameName').textContent=caps[i][0];$('#frameCap').textContent=caps[i][1]}
 tabs.forEach(t=>t.onclick=()=>{clearInterval(auto);peek(+t.dataset.i)});peek(0);

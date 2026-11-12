@@ -111,3 +111,4 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;max-wi
 .choice-card .btn{margin-top:auto;text-align:center;align-self:flex-start}
 .choice-note{text-align:center;margin-top:18px}
 @media (max-width:720px){.choice{grid-template-columns:1fr}.choice-card .btn{width:100%}}
+#faq details{margin-top:12px}#faq summary{cursor:pointer;padding:4px 0}#faq details p{margin:12px 0 0}#faq h2{margin-bottom:24px}

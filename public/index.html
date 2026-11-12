@@ -24,7 +24,7 @@
   <nav aria-label="Sections">
     <a href="#how">How it works</a><a href="#peek">Look inside</a><a href="#roles">Who can do what</a><a href="#proof">Proof</a>
   </nav>
-  <a class="btn" href="/app.html">Open the demo</a>
+  <a class="btn" href="/app.html">Try practice mode</a>
 </header>
 
 <main id="main">
@@ -87,14 +87,14 @@
 
 <section class="band alt" id="peek">
   <div class="wrap">
-    <h2>See it before you sign in.</h2>
+    <h2>See it before you try it.</h2>
     <p class="sub">These are real screens from the dashboard, not mock-ups.</p>
     <div class="peek">
       <div class="tabs" role="tablist" aria-label="Dashboard screens" id="peekTabs">
-        <button role="tab" class="on" data-i="0">Overview</button><button role="tab" data-i="1">Invoices</button><button role="tab" data-i="2">Revenue split</button><button role="tab" data-i="3">Security lab</button><button role="tab" data-i="4">Activity</button>
+        <button role="tab" class="on" data-i="0">Home</button><button role="tab" data-i="1">Invoices</button><button role="tab" data-i="2">Money in</button><button role="tab" data-i="3">Security lab</button><button role="tab" data-i="4">Activity</button>
       </div>
       <figure class="frame" id="frame">
-        <div class="bar"><i></i><i></i><i></i><span>trustpal / <em id="frameName">overview</em></span></div>
+        <div class="bar"><i></i><i></i><i></i><span>trustpal / <em id="frameName">home</em></span></div>
         <div class="shots"><img src="/img/overview.jpg" alt="Trustpal overview screen" width="1440" height="900" class="on"><img src="/img/invoices.jpg" alt="Invoice screen" loading="lazy" width="1440" height="900"><img src="/img/revenue.jpg" alt="Revenue split screen" loading="lazy" width="1440" height="900"><img src="/img/security.jpg" alt="Security lab screen" loading="lazy" width="1440" height="900"><img src="/img/activity.jpg" alt="Activity screen" loading="lazy" width="1440" height="900"></div>
         <figcaption id="frameCap"></figcaption>
       </figure>
@@ -119,16 +119,22 @@
     <h2>Every claim says how well it is proven.</h2>
     <div class="trio">
       <article class="slab rv"><span class="badge live">Live on NEAR testnet</span><ul class="ticks"><li>Fraud on an approved invoice refused</li><li>Approved invoice paid exactly as approved</li><li>Paying the same invoice twice refused</li><li>Revenue split paid out by the contract</li><li>The AI's key refused <b class="n" data-to="6">6</b> of 6 forbidden actions</li></ul></article>
-      <article class="slab rv"><span class="badge off">Tested offline</span><ul class="ticks"><li><b class="n" data-to="31">31</b> contract tests</li><li><b class="n" data-to="49">49</b> application tests</li><li>Limits, waiting period, rounding, pause</li></ul></article>
-      <article class="slab rv"><span class="badge sim">Simulation</span><ul class="ticks"><li>The default demo AI is scripted and deliberately gullible</li><li>Practice mode runs on an in-memory copy of the rules</li><li>The gate animation replays a real result</li></ul></article>
+      <article class="slab rv"><span class="badge off">Tested offline</span><ul class="ticks"><li><b class="n" data-to="31">31</b> contract tests</li><li><b class="n" data-to="55">55</b> application tests</li><li>Limits, waiting period, rounding, pause</li></ul></article>
+      <article class="slab rv"><span class="badge sim">Simulation</span><ul class="ticks"><li>The default demo AI is scripted and deliberately gullible</li><li>Practice mode runs on an in-memory copy of the rules</li><li>Practice mode needs no wallet and moves no money; live mode is one configured demo business on testnet</li></ul></article>
     </div>
     <div class="honest rv"><h3>The honest part</h3><p>Trustpal runs on NEAR testnet only. It has not been audited, it pays in native NEAR (stablecoins are the next step), and the owner's key is the master key. Do not use it with real funds. The full list is in <a href="https://github.com/omni6nt/trustpal-agent/blob/main/DEFENCE_NOTE.md">the defence note</a>.</p></div>
   </div>
 </section>
 
+<section class="band" id="faq"><div class="wrap"><h2>Questions, answered.</h2>
+<details class="slab"><summary><b>Can the AI take my money?</b></summary><p>It holds one key that can only call pay. It cannot change your rules or approve its own exceptions. The contract refuses anyone who is not on your list unless you approved that exact payment.</p></details>
+<details class="slab"><summary><b>What if the AI is fooled?</b></summary><p>It can still be fooled into proposing a wrong payment. The contract's limits cap the damage, and a payment that does not match the invoice total waits for you. In our red-team run, money moved wrongly 0 times.</p></details>
+<details class="slab"><summary><b>Do I need a wallet to try it?</b></summary><p>No. Practice mode runs on your computer with no wallet and no money. Live mode is one configured demo business on NEAR testnet.</p></details>
+<details class="slab"><summary><b>Can anyone sign up with their own rules?</b></summary><p>Not yet. That needs a separate treasury for every wallet, which we have left for after the hackathon.</p></details>
+</div></section>
 <section class="final">
   <h2>Try to rob it.</h2>
-  <p>Open the demo, run the five attacks, and watch each one stop at its check.</p>
+  <p>Open practice mode, run the five attacks, and watch each one stop at its check.</p>
   <a class="btn big" href="/app.html#security">Open the security lab</a>
 </section>
 </main>

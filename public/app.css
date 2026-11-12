@@ -331,3 +331,8 @@ label{display:grid;gap:7px;font-weight:600;font-size:var(--fs-sm);color:var(--c4
 .heldcard h3{margin:0 0 6px}.heldcard dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:10px 0}.heldcard dt{color:var(--c3)}.heldcard dd{margin:0;word-break:break-all}
 .wiz{max-width:560px}.wiz label{display:block;margin:12px 0}.wiz input{width:100%}
 .wiz .steps-dots{display:flex;gap:6px;margin-bottom:14px}.wiz .steps-dots i{width:28px;height:4px;border-radius:2px;background:var(--c2)}.wiz .steps-dots i.on{background:var(--c5,#fff)}
+
+@media (max-width:900px){.desk,.advanced-details{display:none!important}}
+
+.mob{display:none}
+@media (max-width:900px){.quick.mob{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 24px}.quick a{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 4px;border-radius:22px;background:var(--c1);border:1px solid #cccfce1a;color:var(--c5);text-decoration:none;font-size:12px;font-weight:700;text-align:center}.quick i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--c2);font-size:18px;color:#fff}}
