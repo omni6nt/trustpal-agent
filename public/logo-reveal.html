@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>Trustpal logo reveal</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{height:100%;margin:0;background:#06141B;display:grid;place-items:center;overflow:hidden;font-family:Manrope,system-ui,sans-serif}
+.s{display:flex;align-items:center;gap:36px;opacity:0;animation:in .01s .2s forwards}
+.m{width:min(34vw,360px);aspect-ratio:481/420;background:url(/img/logo.png) center/contain no-repeat;clip-path:inset(0 100% 0 0);animation:w 1.6s cubic-bezier(.65,0,.35,1) .4s forwards}
+.t{color:#CCD0CF;font-weight:800;font-size:min(9vw,88px);letter-spacing:-.03em;opacity:0;transform:translateX(-14px);animation:t .9s ease 1.6s forwards}
+.tag{position:absolute;bottom:14%;color:#9BA8AB;font-weight:600;font-size:min(3vw,26px);opacity:0;animation:t .9s ease 2.4s forwards}
+@keyframes in{to{opacity:1}}@keyframes w{to{clip-path:inset(0 0 0 0)}}@keyframes t{to{opacity:1;transform:none}}
+body{cursor:pointer}@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-delay:0s!important}}</style>
+<div class="s"><div class="m"></div><div class="t">Trustpal</div></div><div class="tag">A business an AI can run, but cannot rob.</div>
+<script>document.body.onclick=()=>location.reload()</script>
